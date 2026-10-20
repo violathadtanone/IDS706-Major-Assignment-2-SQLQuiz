@@ -305,11 +305,17 @@ function updateProgress() {
     : "5 questions · 4 points each";
 
   for (const item of navItems) {
-    item.classList.toggle(
-      "is-complete",
-      signedIn && earnedQuestions.has(item.dataset.quiz),
-    );
+    const complete = signedIn && earnedQuestions.has(item.dataset.quiz);
+    item.classList.toggle("is-complete", complete);
+    const quiz = quizzes[item.dataset.quiz];
+    item.querySelector(".nav-number").textContent = complete ? "✓" : quiz.number;
+    item.setAttribute("aria-label", `${quiz.title}${complete ? " — Correct, 4 points earned" : ""}`);
   }
+  const currentComplete = signedIn && earnedQuestions.has(currentQuizId);
+  document.querySelector(".challenge").classList.toggle("is-complete", currentComplete);
+  const quiz = getCurrentQuiz();
+  document.querySelector("#challenge-kicker").innerHTML =
+    `QUESTION ${currentComplete ? "✓" : quiz.number} <span>•</span> ${quiz.level}${currentComplete ? " · CORRECT" : ""}`;
 }
 
 function updateAuthControls() {

@@ -66,18 +66,39 @@
           </div>
         </section>
 
-        <section class="briefing-strip" aria-label="Quiz briefing">
-          <div class="briefing-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24">
-              <path d="M12 3v18m-6-3h12M7 7h10l-5-4z" />
-              <path d="M5 11h14" />
-            </svg>
+        <section class="dataset-diagram" aria-labelledby="dataset-title">
+          <div class="dataset-heading">
+            <div>
+              <p class="section-label">MEET YOUR DATA</p>
+              <h2 id="dataset-title">Three tables. One connected story.</h2>
+            </div>
+            <span class="total-points"><strong>20</strong><span>POINTS TOTAL</span></span>
           </div>
-          <p>
-            <strong>Your assignment</strong>
-            <span>Use SQL to see which students, schools, and cities need the most lunch support.</span>
-          </p>
-          <span class="total-points"><strong>20</strong><span>POINTS TOTAL</span></span>
+          <div class="dataset-flow">
+            <article class="dataset-node">
+              <h3><span aria-hidden="true">▦</span> schools</h3>
+              <p>School details for students enrolled in the free lunch program, including location and school type.</p>
+              <code>school_id <span>primary key</span></code>
+            </article>
+            <div class="dataset-link" aria-label="One school has many students, connected by school_id">
+              <span>1 → many</span><span class="dataset-connector" aria-hidden="true">→</span><code>school_id</code>
+            </div>
+            <article class="dataset-node">
+              <h3><span aria-hidden="true">♙</span> students</h3>
+              <p>Students enrolled in the free lunch program, with their school, grade level, and GPA.</p>
+              <code>student_id <span>primary key</span></code>
+              <code>school_id <span>links to schools</span></code>
+            </article>
+            <div class="dataset-link" aria-label="One student has many meal transactions, connected by student_id">
+              <span>1 → many</span><span class="dataset-connector" aria-hidden="true">→</span><code>student_id</code>
+            </div>
+            <article class="dataset-node">
+              <h3><span aria-hidden="true">≡</span> meals</h3>
+              <p>Individual meal transactions for those students, including the meal date, item, and price.</p>
+              <code>meal_id <span>primary key</span></code>
+              <code>student_id <span>links to students</span></code>
+            </article>
+          </div>
         </section>
 
         <div class="workspace">

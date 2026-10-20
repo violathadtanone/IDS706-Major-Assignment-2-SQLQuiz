@@ -432,6 +432,41 @@ h1 span {
   line-height: 1.4;
 }
 
+.dataset-diagram {
+  padding: 18px;
+  border: 1px solid #dce9f4;
+  border-radius: 10px;
+  background: linear-gradient(100deg, #eaf5fd, #f6faff 72%);
+}
+
+.dataset-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+.dataset-heading .section-label { margin: 0 0 5px; }
+.dataset-heading h2 { margin: 0; font-family: var(--display); font-size: 15px; }
+.dataset-flow { display: grid; grid-template-columns: 1fr 74px 1fr 74px 1fr; align-items: center; }
+.dataset-node { min-width: 0; height: 100%; padding: 14px; border: 1px solid #d6e5f0; border-radius: 8px; background: #fff; }
+.dataset-node h3 { display: flex; gap: 8px; align-items: center; margin: 0 0 8px; color: var(--navy); font-family: var(--mono); font-size: 12px; }
+.dataset-node h3 > span { color: var(--blue); }
+.dataset-node p { margin: 0 0 12px; color: var(--ink-soft); font-size: 10px; line-height: 1.65; }
+.dataset-node > code { display: block; margin-top: 5px; color: #405e7c; font-family: var(--mono); font-size: 9px; overflow-wrap: anywhere; }
+.dataset-node code span { color: #6d8094; font-family: var(--sans); font-size: 8px; }
+.dataset-link { display: flex; flex-direction: column; align-items: center; gap: 3px; color: #597c9b; font-size: 8px; }
+.dataset-link code { font-family: var(--mono); font-size: 8px; }
+.dataset-connector { font-size: 25px; line-height: 1; color: var(--blue); }
+
+@media (max-width: 650px) {
+  .dataset-flow { grid-template-columns: 1fr; }
+  .dataset-link { padding: 9px 0; }
+  .dataset-connector { transform: rotate(90deg); }
+  .dataset-heading h2 { font-size: 13px; }
+}
+
 .workspace {
   display: grid;
   grid-template-columns: 236px minmax(0, 1fr);
@@ -594,6 +629,35 @@ h1 span {
 .quiz-nav-item.is-complete .nav-points {
   color: var(--blue);
 }
+
+.quiz-nav-item.is-complete,
+.quiz-nav-item.is-complete:hover {
+  border-color: #b9dfc7;
+  background: #edf9f0;
+}
+
+.quiz-nav-item.is-complete .nav-number {
+  border-color: #8bc5a0;
+  background: #d7efdf;
+  color: #226440;
+  font-size: 14px;
+}
+
+.quiz-nav-item.is-complete .nav-copy strong,
+.quiz-nav-item.is-complete .nav-points {
+  color: #226440;
+}
+
+.quiz-nav-item.is-complete.is-active { box-shadow: inset 3px 0 #44885c; }
+
+.challenge.is-complete .challenge-heading {
+  border-radius: 7px;
+  background: #edf9f0;
+  box-shadow: 0 0 0 8px #edf9f0;
+}
+
+.challenge.is-complete .challenge-kicker,
+.challenge.is-complete .challenge-heading h2 { color: #226440; }
 
 .schema-card {
   margin-top: 21px;
@@ -1331,7 +1395,11 @@ h1 span {
 }
 
 .feedback-message.is-success {
-  color: var(--navy);
+  padding: 10px 12px;
+  border: 1px solid #b9dfc7;
+  border-radius: 8px;
+  background: #edf9f0;
+  color: #226440;
 }
 
 .feedback-message.is-error {
