@@ -56,6 +56,17 @@ jobs:
       - name: Test SQL safety rules
         run: deno test supabase/functions/quiz-api/index_test.ts
 
+      # The postgres service is plain PostgreSQL, so supply the roles that
+      # Supabase already provides in the deployed database.
+      - name: Create Supabase roles in test database
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon NOLOGIN NOINHERIT;
+          CREATE ROLE authenticated NOLOGIN NOINHERIT;
+          CREATE ROLE service_role NOLOGIN NOINHERIT BYPASSRLS;
+          GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+          SQL
+
       - name: Apply dataset migration
         run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261020000000_school_lunch_dataset.sql
 
