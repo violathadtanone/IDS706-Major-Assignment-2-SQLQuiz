@@ -840,6 +840,18 @@ h1 span {
   line-height: 1.65;
 }
 
+.prompt-card .requirements-label {
+  margin-top: 14px;
+}
+
+.requirements-list {
+  padding-left: 18px;
+}
+
+.requirements-list li + li {
+  margin-top: 5px;
+}
+
 .hint-card {
   overflow: hidden;
   margin-top: 10px;

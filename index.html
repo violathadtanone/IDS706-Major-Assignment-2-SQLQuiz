@@ -44,9 +44,8 @@
             <p class="eyebrow"><span>FIELD BRIEFING</span> <span class="eyebrow-rule"></span> NORTH CAROLINA</p>
             <h1 id="page-title">Follow the lunch.<br /><span>Find the support.</span></h1>
             <p class="welcome-copy">
-              You’re a state official reviewing the school lunch budget. Every
-              student in this dataset participates in the free lunch program;
-              each meal record represents a student meal transaction.
+              Build your SQL confidence, one query at a time. Explore the data,
+              tackle each challenge, and turn practice into progress.
             </p>
           </div>
           <div class="welcome-art" aria-hidden="true">
@@ -85,15 +84,15 @@
           <aside class="sidebar" aria-label="Quiz navigation">
             <section class="progress-card" aria-label="Quiz progress">
               <div class="progress-heading">
-                <span class="section-label">QUESTIONS SAVED</span>
-                <span class="progress-count" id="progress-count">0 <span>/ 5</span></span>
+                <span class="section-label">POINTS EARNED</span>
+                <span class="progress-count" id="progress-count">0 <span>/ 20</span></span>
               </div>
               <div
                 class="progress-track"
                 role="progressbar"
-                aria-label="Questions saved"
+                aria-label="Points earned"
                 aria-valuemin="0"
-                aria-valuemax="5"
+                aria-valuemax="20"
                 aria-valuenow="0"
                 id="progress-bar"
               >
@@ -147,11 +146,11 @@
                 <summary><span class="table-dot"></span>schools</summary>
                 <p>school_id · school_name · city · state · school_type</p>
               </details>
-              <details class="schema-table">
+              <details class="schema-table" open>
                 <summary><span class="table-dot"></span>students</summary>
                 <p>student_id · first_name · last_name · grade_level · gpa · school_id</p>
               </details>
-              <details class="schema-table">
+              <details class="schema-table" open>
                 <summary><span class="table-dot"></span>meals</summary>
                 <p>meal_id · student_id · meal_date · meal_item · price</p>
               </details>
@@ -179,23 +178,23 @@
                 <svg viewBox="0 0 24 24"><path d="m12 3 2.1 6.3L21 12l-6.9 2.7L12 21l-2.1-6.3L3 12l6.9-2.7z" /></svg>
               </span>
               <div>
-                <p class="section-label">YOUR QUESTION</p>
+                <p class="section-label">SCENARIO</p>
                 <p class="prompt-copy" id="challenge-prompt">
-                  Who are the 10 students with the highest GPA? Return each
-                  student’s ID, name, grade level, and GPA, ordered from highest
-                  to lowest.
+                  You are a state official analyzing student academic performance to identify the highest-GPA students in the free lunch program.
                 </p>
+                <p class="section-label requirements-label">REQUIREMENTS</p>
+                <ul class="prompt-copy requirements-list" id="challenge-requirements"></ul>
               </div>
             </div>
 
             <details class="hint-card" id="hint-card">
               <summary>
                 <span class="hint-summary-icon" aria-hidden="true">?</span>
-                <span><strong>Open Hint</strong><small>See an expected SQL solution and result</small></span>
+                <span><strong>Open Hint</strong><small>See writing guidelines and the expected result</small></span>
                 <span class="hint-chevron" aria-hidden="true">⌄</span>
               </summary>
               <div class="hint-content">
-                <p class="section-label">EXPECTED SQL</p>
+                <p class="section-label">SQL WRITING GUIDELINE</p>
                 <pre><code id="hint-sql"></code></pre>
                 <p class="section-label expected-result-label">EXPECTED RESULT</p>
                 <p class="hint-result-description" id="hint-result-description"></p>
@@ -260,6 +259,8 @@
               </div>
             </section>
 
+            <p class="feedback-message" id="feedback-message" role="status" aria-live="polite"></p>
+
             <section class="results-card" aria-labelledby="results-heading">
               <div class="results-heading">
                 <div>
@@ -280,7 +281,6 @@
               </p>
             </section>
 
-            <p class="feedback-message" id="feedback-message" role="status" aria-live="polite"></p>
           </section>
         </div>
       </main>

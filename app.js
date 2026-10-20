@@ -3,8 +3,15 @@ const quizzes = {
     number: "01",
     title: "Who are the top 10 students by GPA?",
     level: "EASY",
-    prompt:
-      "Who are the 10 students with the highest GPA? Return each student's ID, name, grade level, and GPA, ordered from highest to lowest.",
+    scenario: "You are a state official analyzing student academic performance to identify the highest-GPA students in the free lunch program.",
+    requirements: [
+      "Return student_id, first_name, last_name, grade_level, and gpa, in that column order, from the students dataset.",
+      "Order the final output by GPA from highest to lowest.",
+      "Return only the first 10 students."
+    ],
+    hint: `Choose the requested student columns.
+Sort the GPA column from highest to lowest.
+Limit the number of returned rows to the requested count.`,
     solution: `SELECT
     student_id,
     first_name,
@@ -28,27 +35,21 @@ LIMIT 10;`,
       ["student_050", "Camila", "Ramirez", "Grade 11", "3.80"],
       ["student_053", "Ethan", "Clark", "Grade 10", "3.79"],
     ],
-    checks: [
-      {
-        label: "selects records from students",
-        test: (sql) => /\bselect\b[\s\S]*\bfrom\s+students\b/i.test(sql),
-      },
-      {
-        label: "orders GPA from highest to lowest",
-        test: (sql) => /\border\s+by\s+(?:st\.)?gpa\s+desc\b/i.test(sql),
-      },
-      {
-        label: "limits the result to 10",
-        test: (sql) => /\blimit\s+10\b/i.test(sql),
-      },
-    ],
   },
   "average-gpa": {
     number: "02",
     title: "What is the average GPA at each school?",
     level: "MEDIUM",
-    prompt:
-      "Calculate the average GPA for students at each school. Show the school name and the average rounded to two decimal places, highest average first.",
+    scenario: "You are a state official comparing academic performance across schools participating in the free lunch program.",
+    requirements: [
+      "Match each student to their school using the shared school identifier; include only schools with matching students.",
+      "Combine students into one group per school, identified by its school identifier and name.",
+      "Return school_name followed by average_gpa, calculated as the mean student GPA at each school and rounded to two decimal places.",
+      "Order the final output by average GPA from highest to lowest and include every matching school."
+    ],
+    hint: `Join schools and students using their shared school identifier.
+Group students by school and calculate the mean GPA.
+Round to two decimal places and sort the averages descending.`,
     solution: `SELECT
     s.school_name,
     ROUND(AVG(st.gpa), 2) AS average_gpa
@@ -71,31 +72,21 @@ ORDER BY average_gpa DESC;`,
       ["Capital View Academy", "3.18"],
       ["Pinecrest Academy", "3.02"],
     ],
-    checks: [
-      {
-        label: "joins schools to students by school_id",
-        test: (sql) =>
-          /\bfrom\s+schools\s+(?:as\s+)?s\b[\s\S]*\bjoin\s+students\s+(?:as\s+)?st\b[\s\S]*\bs\.school_id\s*=\s*st\.school_id\b/i.test(
-            sql,
-          ),
-      },
-      {
-        label: "calculates and rounds the average GPA",
-        test: (sql) => /\bround\s*\(\s*avg\s*\(\s*st\.gpa\s*\)\s*,\s*2\s*\)/i.test(sql),
-      },
-      {
-        label: "groups by school",
-        test: (sql) =>
-          /\bgroup\s+by\b[\s\S]*\bs\.school_id\b[\s\S]*\bs\.school_name\b/i.test(sql),
-      },
-    ],
   },
   "student-count": {
     number: "03",
     title: "Which 5 schools serve the most students?",
     level: "MEDIUM",
-    prompt:
-      "All students in this dataset are enrolled in the free lunch program. Find the five schools with the most participating students, from the largest student count to the smallest.",
+    scenario: "You are a state official analyzing free lunch enrollment to identify the schools serving the most participating students.",
+    requirements: [
+      "Every student in this dataset participates in the free lunch program; match students to schools using the shared school identifier.",
+      "Combine students into one group per school, identified by its school identifier and name.",
+      "Return school_name followed by student_count, counting student identifiers within each school.",
+      "Order the final output by student count from highest to lowest and return only the first 5 schools."
+    ],
+    hint: `Join schools and students using their shared school identifier.
+Count the participating students in each school group.
+Sort the counts descending and keep the requested number of schools.`,
     solution: `SELECT
     s.school_name,
     COUNT(st.student_id) AS student_count
@@ -115,31 +106,21 @@ LIMIT 5;`,
       ["Lakewood High School", "14"],
       ["Capital View Academy", "9"],
     ],
-    checks: [
-      {
-        label: "joins schools to students by school_id",
-        test: (sql) =>
-          /\bfrom\s+schools\s+(?:as\s+)?s\b[\s\S]*\bjoin\s+students\s+(?:as\s+)?st\b[\s\S]*\bs\.school_id\s*=\s*st\.school_id\b/i.test(
-            sql,
-          ),
-      },
-      {
-        label: "counts students",
-        test: (sql) => /\bcount\s*\(\s*st\.student_id\s*\)/i.test(sql),
-      },
-      {
-        label: "returns the top five schools",
-        test: (sql) =>
-          /\border\s+by\s+student_count\s+desc\b/i.test(sql) && /\blimit\s+5\b/i.test(sql),
-      },
-    ],
   },
   "city-cost": {
     number: "04",
     title: "What is the average lunch cost in each city?",
     level: "ADVANCED",
-    prompt:
-      "For each city, calculate the average price of a recorded student meal. Show the city and average lunch cost rounded to two decimals, highest first.",
+    scenario: "You are a state official comparing average meal costs across cities to understand differences in school lunch spending.",
+    requirements: [
+      "Match schools to students using the school identifier, then match students to recorded meals using the student identifier; include only matching records.",
+      "Combine meal transactions into one group per city.",
+      "Return city followed by average_lunch_cost, calculated as the mean recorded meal price in each city and rounded to two decimal places.",
+      "Order the final output by average lunch cost from highest to lowest and include every city with recorded meals."
+    ],
+    hint: `Follow the relationships from schools to students to meals.
+Group meal transactions by city and calculate the mean price.
+Round the averages to two decimals and sort them descending.`,
     solution: `SELECT
     s.city,
     ROUND(AVG(m.price), 2) AS average_lunch_cost
@@ -160,31 +141,21 @@ ORDER BY average_lunch_cost DESC;`,
       ["Greensboro", "4.52"],
       ["Durham", "4.52"],
     ],
-    checks: [
-      {
-        label: "joins schools, students, and meals",
-        test: (sql) =>
-          /\bfrom\s+schools\s+(?:as\s+)?s\b[\s\S]*\bjoin\s+students\s+(?:as\s+)?st\b[\s\S]*\bs\.school_id\s*=\s*st\.school_id\b[\s\S]*\bjoin\s+meals\s+(?:as\s+)?m\b[\s\S]*\bst\.student_id\s*=\s*m\.student_id\b/i.test(
-            sql,
-          ),
-      },
-      {
-        label: "calculates average meal price rounded to two decimals",
-        test: (sql) =>
-          /\bround\s*\(\s*avg\s*\(\s*m\.price\s*\)\s*,\s*2\s*\)/i.test(sql),
-      },
-      {
-        label: "groups results by city",
-        test: (sql) => /\bgroup\s+by\s+s\.city\b/i.test(sql),
-      },
-    ],
   },
   "school-cost": {
     number: "05",
     title: "Which schools have the highest lunch costs?",
     level: "ADVANCED",
-    prompt:
-      "Find the 10 schools with the highest total cost of recorded meal transactions. Include school, city, number of meals, and total lunch cost rounded to two decimals.",
+    scenario: "You are a state official analyzing school lunch spending to identify the schools with the highest total meal costs.",
+    requirements: [
+      "Match schools to students using the school identifier, then match students to recorded meals using the student identifier; include only matching records.",
+      "Combine meal transactions into one group per school, identified by its school identifier, name, and city.",
+      "Return school_name, city, total_meals, and total_lunch_cost, in that column order; count meal identifiers for total_meals and add recorded meal prices for total_lunch_cost, rounding the cost to two decimal places.",
+      "Order the final output by total lunch cost from highest to lowest and return up to the first 10 schools."
+    ],
+    hint: `Follow the relationships from schools to students to meals.
+Group by school and city, then count meals and add their prices.
+Round the totals, sort descending, and keep the requested number of schools.`,
     solution: `SELECT
     s.school_name,
     s.city,
@@ -211,30 +182,6 @@ LIMIT 10;`,
       ["Pinecrest Academy", "Durham", "28", "126.90"],
       ["Queen City Preparatory", "Charlotte", "23", "103.80"],
       ["Blue Ridge High School", "Asheville", "10", "45.65"],
-    ],
-    checks: [
-      {
-        label: "joins schools, students, and meals",
-        test: (sql) =>
-          /\bfrom\s+schools\s+(?:as\s+)?s\b[\s\S]*\bjoin\s+students\s+(?:as\s+)?st\b[\s\S]*\bs\.school_id\s*=\s*st\.school_id\b[\s\S]*\bjoin\s+meals\s+(?:as\s+)?m\b[\s\S]*\bst\.student_id\s*=\s*m\.student_id\b/i.test(
-            sql,
-          ),
-      },
-      {
-        label: "counts meals and sums the meal price",
-        test: (sql) =>
-          /\bcount\s*\(\s*m\.meal_id\s*\)/i.test(sql) &&
-          /\bround\s*\(\s*sum\s*\(\s*m\.price\s*\)\s*,\s*2\s*\)/i.test(sql),
-      },
-      {
-        label: "groups by school and limits the result to 10",
-        test: (sql) =>
-          /\bgroup\s+by\b[\s\S]*\bs\.school_id\b[\s\S]*\bs\.school_name\b[\s\S]*\bs\.city\b/i.test(
-            sql,
-          ) &&
-          /\border\s+by\s+total_lunch_cost\s+desc\b/i.test(sql) &&
-          /\blimit\s+10\b/i.test(sql),
-      },
     ],
   },
 };
@@ -264,7 +211,8 @@ const runButton = document.querySelector("#run-query");
 let currentQuizId = questionIds[0];
 let currentUser = null;
 let signedIn = false;
-let answerChecked = false;
+let earnedQuestions = new Set();
+let checkingAnswer = false;
 let savedProgress = {};
 let client = null;
 let initializationError = "";
@@ -328,20 +276,38 @@ function updateSaveButton() {
   saveButton.textContent = alreadySaved ? "Update saved query" : "Save quiz";
 }
 
+function scoreStorageKey() {
+  return `sql-quiz-points:${currentUser.id}`;
+}
+
+function loadEarnedPoints() {
+  earnedQuestions = new Set();
+  if (!signedIn) return;
+  try {
+    const stored = JSON.parse(localStorage.getItem(scoreStorageKey()) ?? "[]");
+    if (Array.isArray(stored)) {
+      earnedQuestions = new Set(stored.filter((id) => questionIds.includes(id)));
+    }
+  } catch {
+    // Scoring remains available when browser storage is unavailable.
+  }
+}
+
 function updateProgress() {
-  const savedCount = signedIn ? Object.keys(savedProgress).length : 0;
+  const correctCount = signedIn ? earnedQuestions.size : 0;
+  const points = correctCount * 4;
   document.querySelector("#progress-count").innerHTML =
-    `${savedCount} <span>/ 5</span>`;
-  document.querySelector("#progress-fill").style.width = `${savedCount * 20}%`;
-  document.querySelector("#progress-bar").setAttribute("aria-valuenow", savedCount);
+    `${points} <span>/ 20</span>`;
+  document.querySelector("#progress-fill").style.width = `${points * 5}%`;
+  document.querySelector("#progress-bar").setAttribute("aria-valuenow", points);
   document.querySelector("#progress-caption").textContent = signedIn
-    ? `${savedCount} of 5 questions saved to your account`
+    ? `${correctCount} of 5 correct · 4 points each · saved in this browser`
     : "5 questions · 4 points each";
 
   for (const item of navItems) {
     item.classList.toggle(
       "is-complete",
-      signedIn && Boolean(savedProgress[item.dataset.quiz]),
+      signedIn && earnedQuestions.has(item.dataset.quiz),
     );
   }
 }
@@ -361,7 +327,7 @@ function updateAuthControls() {
   editor.readOnly = !signedIn;
   paramsInput.disabled = !signedIn;
   runButton.disabled = !signedIn;
-  checkButton.disabled = !signedIn;
+  checkButton.disabled = !signedIn || checkingAnswer;
   saveButton.disabled = !signedIn;
   editorAccess.textContent = signedIn ? "Signed-in workspace · editable" : "Sign in to edit";
   saveStatus.textContent = signedIn ? "Saved to your account on request" : "Sign in to save";
@@ -406,7 +372,7 @@ function renderTable(headers, rows, container) {
 
 function renderHint(quiz) {
   document.querySelector("#hint-card").open = false;
-  document.querySelector("#hint-sql").textContent = quiz.solution;
+  document.querySelector("#hint-sql").textContent = quiz.hint;
   document.querySelector("#hint-result-description").textContent =
     quiz.resultDescription;
   renderTable(quiz.headers, quiz.rows, document.querySelector("#hint-result-table"));
@@ -433,12 +399,17 @@ function clearResults() {
 
 function renderQuiz(quizId) {
   currentQuizId = quizId;
-  answerChecked = false;
   const quiz = getCurrentQuiz();
   document.querySelector("#challenge-kicker").innerHTML =
     `QUESTION ${quiz.number} <span>•</span> ${quiz.level}`;
   document.querySelector("#challenge-title").textContent = quiz.title;
-  document.querySelector("#challenge-prompt").textContent = quiz.prompt;
+  document.querySelector("#challenge-prompt").textContent = quiz.scenario;
+  const requirements = quiz.requirements.map((requirement) => {
+    const item = document.createElement("li");
+    item.textContent = requirement;
+    return item;
+  });
+  document.querySelector("#challenge-requirements").replaceChildren(...requirements);
   document.querySelector(".points-pill").innerHTML = "<strong>4</strong> POINTS";
   renderHint(quiz);
 
@@ -509,8 +480,10 @@ async function loadSavedProgress() {
 }
 
 async function applySession(session) {
+  const previousUserId = currentUser?.id;
   currentUser = session?.user ?? null;
   signedIn = Boolean(currentUser);
+  if (previousUserId !== currentUser?.id) loadEarnedPoints();
   if (!signedIn) {
     savedProgress = {};
   }
@@ -646,7 +619,7 @@ for (const item of navItems) {
 }
 
 editor.addEventListener("input", () => {
-  answerChecked = false;
+  showFeedback("");
   updateLineNumbers();
 });
 
@@ -668,45 +641,90 @@ editor.addEventListener("keydown", (event) => {
 });
 
 paramsInput.addEventListener("input", () => {
-  answerChecked = false;
+  showFeedback("");
 });
 
-checkButton.addEventListener("click", () => {
-  const sql = editor.value
-    .replace(/--[^\n]*/g, " ")
-    .replace(/\/\*[\s\S]*?\*\//g, " ")
-    .trim();
+// Compare values rather than SQL spelling or aliases. Tied rows may be in
+// either order, but the requested ranking metric must still be descending.
+function answersMatch(actual, expected) {
+  if (actual.truncated || expected.truncated || !expected.rows.length ||
+      actual.columns.length !== expected.columns.length ||
+      actual.rows.length !== expected.rows.length) return false;
+  const normalize = (value) => {
+    if (value === null) return null;
+    if (typeof value === "number" ||
+        (typeof value === "string" && /^-?\d+(?:\.\d+)?$/.test(value))) {
+      return Number(value);
+    }
+    return value;
+  };
+  const rowKey = (row) => JSON.stringify(row.map(normalize));
+  const actualRows = actual.rows.map(rowKey).sort();
+  const expectedRows = expected.rows.map(rowKey).sort();
+  if (!actualRows.every((row, index) => row === expectedRows[index])) return false;
+  const metricIndex = expected.columns.length - 1;
+  return actual.rows.every((row, index, rows) => index === 0 ||
+    Number(rows[index - 1][metricIndex]) >= Number(row[metricIndex]));
+}
+
+async function checkAnswer() {
+  if (!signedIn) {
+    showFeedback("Sign in before checking your SQL.", "error");
+    return;
+  }
+  if (checkingAnswer) return;
+  const quizId = currentQuizId;
+  const userId = currentUser.id;
+  const query = editor.value;
+  const rawParameters = paramsInput.value;
   let parameters;
   try {
+    if (!query.trim()) throw new Error("Write a SQL query before checking your answer.");
     parameters = parseParameters();
   } catch (error) {
     showFeedback(error.message, "error");
     return;
   }
-  const missing = getCurrentQuiz().checks
-    .filter((check) => !check.test(sql))
-    .map((check) => check.label);
-  const referencedParameters = [...sql.matchAll(/\$(\d+)\b/g)].map((match) =>
-    Number(match[1]),
-  );
-  const highestParameter = Math.max(0, ...referencedParameters);
-  if (highestParameter !== parameters.length) {
-    missing.push(
-      `a JSON parameter value for each SQL placeholder ($1 through $${highestParameter})`,
-    );
+  checkingAnswer = true;
+  checkButton.disabled = true;
+  checkButton.textContent = "Checking…";
+  showFeedback("Checking your answer against the dataset…");
+  const isCurrentAttempt = () => currentUser?.id === userId &&
+    currentQuizId === quizId && editor.value === query &&
+    paramsInput.value === rawParameters;
+  try {
+    const actual = await invokeApi({ action: "run", questionId: quizId, query, parameters });
+    if (!isCurrentAttempt()) return;
+    const expected = await invokeApi({
+      action: "run", questionId: quizId,
+      query: quizzes[quizId].solution, parameters: [],
+    });
+    if (!isCurrentAttempt()) return;
+    if (!answersMatch(actual, expected)) {
+      showFeedback("Not correct yet. Check your selected columns, joins, calculations, sorting, and row limit. Open Hint for guidance.", "error");
+      return;
+    }
+    const alreadyEarned = earnedQuestions.has(quizId);
+    earnedQuestions.add(quizId);
+    try {
+      localStorage.setItem(scoreStorageKey(), JSON.stringify([...earnedQuestions]));
+    } catch {
+      // Keep earned points for this session if storage is unavailable.
+    }
+    updateProgress();
+    showFeedback(alreadyEarned
+      ? "Correct! You have already earned this question’s 4 points."
+      : "Correct! You earned 4 points.", "success");
+  } catch (error) {
+    if (isCurrentAttempt()) showFeedback(`Could not check your answer: ${error.message}`, "error");
+  } finally {
+    checkingAnswer = false;
+    checkButton.disabled = !signedIn;
+    checkButton.innerHTML = 'Check my SQL <span aria-hidden="true">↗</span>';
   }
+}
 
-  if (missing.length > 0) {
-    answerChecked = false;
-    showFeedback(`Check that your query ${missing.join(", and ")}.`, "error");
-    return;
-  }
-  answerChecked = true;
-  showFeedback(
-    "The query has the expected structure. Run it against Supabase to inspect the actual rows.",
-    "success",
-  );
-});
+checkButton.addEventListener("click", checkAnswer);
 
 runButton.addEventListener("click", runQuery);
 saveButton.addEventListener("click", saveQuiz);
