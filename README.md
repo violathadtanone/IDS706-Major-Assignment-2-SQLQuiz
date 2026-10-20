@@ -16,59 +16,47 @@ the dataset. Do not run `init.sql` against a shared database; it contains reset
 statements. The migrations under `supabase/migrations/` are the deployment
 source.
 
-## Supabase and GitHub setup
+## GitHub Actions with GitHub Secrets
 
-1. Create a Supabase project and note its project reference, project URL, and
-   publishable key (or legacy anon key). The public key will be included in the
-   browser bundle. Never use a service-role key as the browser key.
-2. In the repository's **Settings → Secrets and variables → Actions**, add:
+The **Verify hosted database** workflow runs on pushes to `main` or manually
+from Actions. It uses one GitHub Secret to connect to the existing hosted
+Supabase database with SSL and verifies that `public.students` is accessible
+and contains data. A connection error, missing table, or empty table fails the
+run. It does not apply migrations or deploy Supabase or the website.
 
-   | Secret | Value |
-   | --- | --- |
-   | `SUPABASE_ACCESS_TOKEN` | A Supabase personal access token for deployment |
-   | `SUPABASE_PROJECT_REF` | The Supabase project reference |
-   | `SUPABASE_DB_PASSWORD` | The project's database password |
-   | `SUPABASE_URL` | The project's URL, such as `https://<ref>.supabase.co` |
-   | `SUPABASE_ANON_KEY` | The publishable key or legacy anon key |
-   | `QUIZ_DATABASE_URL` | Add after the first migration, as described below |
+1. In Supabase's **Connect** panel, select **Session pooler** (port `5432`).
+   Use the same database connection details as your local `.env`:
+   `POSTGRES_USER`, `POSTGRES_PASSWORD`, `DB_HOST`, `DB_PORT`, and `POSTGRES_DB`.
+2. Construct the PostgreSQL connection string in this format:
 
-   The publishable/anon key is intentionally public in the deployed site; it is
-   kept in Actions Secrets to configure the build consistently. Do not add
-   `SUPABASE_SERVICE_ROLE_KEY` or a database-owner connection string to the
-   frontend.
-3. Enable **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-   Configure Supabase Auth's site URL and allowed redirect URLs to include the
-   exact GitHub Pages URL for this repository (and a local development URL if
-   needed). The email template should use Supabase's standard magic-link
-   confirmation.
-4. Push to `main` or manually run **Quiz application checks and deployment**.
-   CI checks JavaScript, type-checks and tests the Edge Function, applies both
-   migrations to a temporary PostgreSQL instance, and verifies row counts,
-   query-role access, and audit immutability. Deployment applies the migrations
-   to Supabase first. On the first deployment it stops after migrations until
-   the restricted database login is configured.
-5. In the Supabase SQL Editor, set a unique password for the role created by the
-   migration:
-
-   ```sql
-   ALTER ROLE quiz_runner WITH PASSWORD 'use-a-new-strong-password';
+   ```text
+   postgresql://<user>:<URL-encoded-password>@<session-pooler-host>:5432/<database>?sslmode=require
    ```
 
-   Enter the password only in the SQL Editor; do not commit it. In Supabase's
-   **Connect** panel, use the **Session pooler** connection details and
-   `quiz_runner.<project-ref>` as the username. URL-encode special characters
-   in the password and add `sslmode=require`. Save the resulting connection URL
-   as the `QUIZ_DATABASE_URL` Actions secret. This connection is used only by
-   the Edge Function; the role is a member of the read-only `quiz_taker` role.
-6. Rerun the workflow. It will set the Edge Function secret, deploy `quiz-api`,
-   build the browser configuration from the public URL/key, and publish the
-   site to GitHub Pages.
+   Use the exact pooler username from Supabase, including the project suffix.
+   URL-encode special characters in the password. This is a database connection
+   string, not the browser/API URL ending in `.supabase.co`.
+3. In GitHub, open **Settings → Secrets and variables → Actions → New repository
+   secret**. Name it `DATABASE_URL` and paste the connection string as its value.
+   Keep the actual credentials out of committed files. `.env` is ignored by Git;
+   GitHub Actions does not automatically read your local `.env`.
+4. Open **Actions → Verify hosted database → Run workflow**, or push to `main`.
+   A successful run with the verification message demonstrates use of the secret.
 
-The first deployment requires two workflow runs because the database role is
-created by the migration before its password can be set. A green **checks** job
-validates CI, but only a successful **deploy** job confirms the configured
-Supabase and Pages deployment. Inspect Actions after pushing; no deployment is
-claimed until that job succeeds.
+## GitHub Pages and existing Supabase setup
+
+Database verification is independent of GitHub Pages. This workflow does not
+publish the frontend or change the existing hosted website. Keep Pages publishing
+separate using your repository's Pages settings or a dedicated Pages workflow.
+The previous combined Supabase/Pages deployment job has been removed.
+
+Keep your existing Supabase Auth settings, deployed Edge Function and its
+`QUIZ_DATABASE_URL` secret, and database schema. The new GitHub `DATABASE_URL`
+secret is only for verification and does not replace the Edge Function's secret.
+The browser still needs its existing public Supabase URL and publishable/anon
+key in `supabase-config.js` when published. The checked-in configuration is a
+placeholder; any future Pages publishing setup must supply those public values.
+Never include database credentials in frontend files.
 
 ## Local checks
 
@@ -80,5 +68,4 @@ deno check supabase/functions/quiz-api/index.ts
 deno test supabase/functions/quiz-api/index_test.ts
 ```
 
-The GitHub Actions workflow runs the database migration and privilege checks
-against a disposable PostgreSQL 16 service.
+These optional local checks are separate from the hosted database workflow.
