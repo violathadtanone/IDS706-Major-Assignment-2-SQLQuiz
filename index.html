@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Practice SQL while exploring North Carolina school lunch support."
+    />
+    <title>IDS 706 — School Lunch Data Lab</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
+    <script src="supabase-config.js"></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="course-brand" href="#" aria-label="IDS 706 Data Engineering Systems home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M4 6.5h16M4 12h10M4 17.5h7" />
+              <circle cx="18" cy="16.5" r="3" />
+            </svg>
+          </span>
+          <span class="brand-name">IDS 706 <span>—</span> Data Engineering Systems</span>
+        </a>
+        <div class="account-actions">
+          <span class="auth-status" id="auth-status">
+            <span class="status-dot" aria-hidden="true"></span> Signed out
+          </span>
+          <button class="button button-signin" id="sign-in" type="button">
+            Sign in
+          </button>
+          <button class="text-button is-hidden" id="sign-out" type="button">
+            Sign out
+          </button>
+        </div>
+      </header>
+
+      <main>
+        <section class="welcome-row" aria-labelledby="page-title">
+          <div class="welcome-copy-block">
+            <p class="eyebrow"><span>FIELD BRIEFING</span> <span class="eyebrow-rule"></span> NORTH CAROLINA</p>
+            <h1 id="page-title">Follow the lunch.<br /><span>Find the support.</span></h1>
+            <p class="welcome-copy">
+              You’re a state official reviewing the school lunch budget. Every
+              student in this dataset participates in the free lunch program;
+              each meal record represents a student meal transaction.
+            </p>
+          </div>
+          <div class="welcome-art" aria-hidden="true">
+            <div class="art-map">
+              <svg viewBox="0 0 198 144">
+                <path d="m20 54 21-7 14 5 12-9 17 2 10-7 16 6 8-6 18 6 14-4 11 8 20 2-3 16-12 8-7 14-19 5-12 13-19-5-13 7-14-8-13 2-12-11-18 1-9-14-14-4z" />
+                <path class="map-line" d="M48 61h105M56 77h98M68 93h82M74 49l-4 53m28-59v64m30-57 2 52" />
+                <circle cx="107" cy="77" r="5" />
+              </svg>
+            </div>
+            <div class="art-note">
+              <span class="art-note-label">THE DATASET</span>
+              <strong>100</strong>
+              <span>students · free lunch</span>
+              <div class="art-note-line"></div>
+            </div>
+            <span class="art-sparkle">✳</span>
+          </div>
+        </section>
+
+        <section class="briefing-strip" aria-label="Quiz briefing">
+          <div class="briefing-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 3v18m-6-3h12M7 7h10l-5-4z" />
+              <path d="M5 11h14" />
+            </svg>
+          </div>
+          <p>
+            <strong>Your assignment</strong>
+            <span>Use SQL to see which students, schools, and cities need the most lunch support.</span>
+          </p>
+          <span class="total-points"><strong>20</strong><span>POINTS TOTAL</span></span>
+        </section>
+
+        <div class="workspace">
+          <aside class="sidebar" aria-label="Quiz navigation">
+            <section class="progress-card" aria-label="Quiz progress">
+              <div class="progress-heading">
+                <span class="section-label">QUESTIONS SAVED</span>
+                <span class="progress-count" id="progress-count">0 <span>/ 5</span></span>
+              </div>
+              <div
+                class="progress-track"
+                role="progressbar"
+                aria-label="Questions saved"
+                aria-valuemin="0"
+                aria-valuemax="5"
+                aria-valuenow="0"
+                id="progress-bar"
+              >
+                <span id="progress-fill"></span>
+              </div>
+              <p id="progress-caption">5 questions · 4 points each</p>
+            </section>
+
+            <div class="quiz-navigation">
+              <p class="section-label">QUESTIONS <span>05</span></p>
+              <nav aria-label="Choose a question">
+                <button class="quiz-nav-item is-active" type="button" data-quiz="top-students" aria-current="step">
+                  <span class="nav-number">01</span>
+                  <span class="nav-copy"><strong>Highest GPA</strong><small>Easy</small></span>
+                  <span class="nav-points">4 pts</span>
+                </button>
+                <button class="quiz-nav-item" type="button" data-quiz="average-gpa">
+                  <span class="nav-number">02</span>
+                  <span class="nav-copy"><strong>GPA by school</strong><small>Medium</small></span>
+                  <span class="nav-points">4 pts</span>
+                </button>
+                <button class="quiz-nav-item" type="button" data-quiz="student-count">
+                  <span class="nav-number">03</span>
+                  <span class="nav-copy"><strong>Free lunch reach</strong><small>Medium</small></span>
+                  <span class="nav-points">4 pts</span>
+                </button>
+                <button class="quiz-nav-item" type="button" data-quiz="city-cost">
+                  <span class="nav-number">04</span>
+                  <span class="nav-copy"><strong>Lunch cost by city</strong><small>Advanced</small></span>
+                  <span class="nav-points">4 pts</span>
+                </button>
+                <button class="quiz-nav-item" type="button" data-quiz="school-cost">
+                  <span class="nav-number">05</span>
+                  <span class="nav-copy"><strong>Highest lunch budget</strong><small>Advanced</small></span>
+                  <span class="nav-points">4 pts</span>
+                </button>
+              </nav>
+            </div>
+
+            <section class="schema-card" aria-labelledby="schema-title">
+              <div class="schema-card-heading">
+                <span class="schema-icon" aria-hidden="true">
+                  <svg viewBox="0 0 20 20">
+                    <rect x="3" y="3.5" width="14" height="13" rx="2" />
+                    <path d="M3 7.5h14M7.5 7.5v9M12.5 7.5v9" />
+                  </svg>
+                </span>
+                <span><strong id="schema-title">Database schema</strong><small>3 connected tables</small></span>
+              </div>
+              <details class="schema-table" open>
+                <summary><span class="table-dot"></span>schools</summary>
+                <p>school_id · school_name · city · state · school_type</p>
+              </details>
+              <details class="schema-table">
+                <summary><span class="table-dot"></span>students</summary>
+                <p>student_id · first_name · last_name · grade_level · gpa · school_id</p>
+              </details>
+              <details class="schema-table">
+                <summary><span class="table-dot"></span>meals</summary>
+                <p>meal_id · student_id · meal_date · meal_item · price</p>
+              </details>
+              <p class="schema-relation">schools → students → meals</p>
+            </section>
+
+            <div class="signin-callout" id="signin-callout">
+              <span class="lock-icon" aria-hidden="true">⌑</span>
+              <p><strong>Want to run &amp; save?</strong><span>Sign in to unlock query tools.</span></p>
+              <button type="button" id="callout-sign-in" aria-label="Sign in to run queries and save">→</button>
+            </div>
+          </aside>
+
+          <section class="challenge" aria-labelledby="challenge-title">
+            <div class="challenge-heading">
+              <div>
+                <p class="challenge-kicker" id="challenge-kicker">QUESTION 01 <span>•</span> EASY</p>
+                <h2 id="challenge-title">Who are the top 10 students by GPA?</h2>
+              </div>
+              <span class="points-pill"><strong>4</strong> POINTS</span>
+            </div>
+
+            <div class="prompt-card">
+              <span class="prompt-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="m12 3 2.1 6.3L21 12l-6.9 2.7L12 21l-2.1-6.3L3 12l6.9-2.7z" /></svg>
+              </span>
+              <div>
+                <p class="section-label">YOUR QUESTION</p>
+                <p class="prompt-copy" id="challenge-prompt">
+                  Who are the 10 students with the highest GPA? Return each
+                  student’s ID, name, grade level, and GPA, ordered from highest
+                  to lowest.
+                </p>
+              </div>
+            </div>
+
+            <details class="hint-card" id="hint-card">
+              <summary>
+                <span class="hint-summary-icon" aria-hidden="true">?</span>
+                <span><strong>Need a hint?</strong><small>See an expected SQL solution and result</small></span>
+                <span class="hint-chevron" aria-hidden="true">⌄</span>
+              </summary>
+              <div class="hint-content">
+                <p class="section-label">EXPECTED SQL</p>
+                <pre><code id="hint-sql"></code></pre>
+                <p class="section-label expected-result-label">EXPECTED RESULT</p>
+                <p class="hint-result-description" id="hint-result-description"></p>
+                <div class="hint-result-table" id="hint-result-table"></div>
+              </div>
+            </details>
+
+            <section class="editor-card" aria-labelledby="editor-title">
+              <div class="editor-toolbar">
+                <div class="editor-title">
+                  <span class="editor-dot" aria-hidden="true"></span>
+                  <strong id="editor-title">Write your SQL query</strong>
+                  <span class="sql-badge">SQL</span>
+                </div>
+                <span class="editor-access" id="editor-access">Sign in to edit</span>
+              </div>
+              <label class="visually-hidden" for="sql-editor">SQL answer</label>
+              <div class="code-editor">
+                <div class="line-numbers" id="line-numbers" aria-hidden="true">1</div>
+                <textarea
+                  id="sql-editor"
+                  spellcheck="false"
+                  autocapitalize="off"
+                  autocomplete="off"
+                  autocorrect="off"
+                  aria-describedby="editor-hint"
+                  readonly
+                ></textarea>
+              </div>
+              <details class="parameter-panel">
+                <summary>
+                  <span>Use query parameters</span>
+                  <span class="parameter-example">$1, $2…</span>
+                </summary>
+                <label for="query-parameters">Parameter values as a JSON array</label>
+                <input
+                  id="query-parameters"
+                  type="text"
+                  placeholder='["Grade 9", 10]'
+                  autocomplete="off"
+                  spellcheck="false"
+                  disabled
+                />
+                <small>Use PostgreSQL placeholders such as $1 in your query. Values are sent separately from SQL.</small>
+              </details>
+              <div class="editor-footer">
+                <span id="editor-hint"><kbd>⌘</kbd><kbd>↵</kbd> to run query</span>
+                <span class="save-status" id="save-status">Sign in to save</span>
+              </div>
+              <div class="editor-actions">
+                <button class="button button-primary" id="run-query" type="button" disabled>
+                  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4.5 8 5.5-8 5.5z" /></svg>
+                  Run query
+                </button>
+                <button class="button button-secondary" id="check-answer" type="button">
+                  Check my SQL <span aria-hidden="true">↗</span>
+                </button>
+                <button class="button button-save" id="save-quiz" type="button" disabled>
+                  Save quiz
+                </button>
+                <span class="preview-note" id="preview-note">Sign in to run queries and save your quiz.</span>
+              </div>
+            </section>
+
+            <section class="results-card" aria-labelledby="results-heading">
+              <div class="results-heading">
+                <div>
+                  <p class="section-label">QUERY OUTPUT</p>
+                  <h3 id="results-heading">Run a query to see results</h3>
+                </div>
+                <span class="result-state" id="result-state">LOCKED</span>
+              </div>
+              <div class="results-content" id="results-content" aria-live="polite">
+                <div class="empty-results">
+                  <div class="empty-icon" aria-hidden="true">⌕</div>
+                  <p>Ready when you are.</p>
+                  <span>Sign in to run your query against the student lunch dataset.</span>
+                </div>
+              </div>
+              <p class="results-footnote" id="results-footnote">
+                Query execution will be connected after the interface is approved.
+              </p>
+            </section>
+
+            <p class="feedback-message" id="feedback-message" role="status" aria-live="polite"></p>
+          </section>
+        </div>
+      </main>
+
+      <footer class="page-footer">
+        <span>IDS 706 · DATA ENGINEERING SYSTEMS</span>
+        <span>FREE LUNCH PROGRAM · NORTH CAROLINA</span>
+      </footer>
+    </div>
+
+    <dialog class="signin-dialog" id="signin-dialog" aria-labelledby="signin-title">
+      <form method="dialog" class="dialog-close-form">
+        <button class="dialog-close" aria-label="Close sign-in dialog">×</button>
+      </form>
+      <div class="dialog-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 3v18m-6-3h12M7 7h10l-5-4z" /></svg>
+      </div>
+      <p class="eyebrow">IDS 706 · SCHOOL LUNCH DATA LAB</p>
+      <h2 id="signin-title">Sign in to your workspace</h2>
+      <p class="dialog-copy">Run SQL queries and save your quiz progress.</p>
+      <form id="signin-form">
+        <label class="signin-label" for="signin-email">School or personal email</label>
+        <input id="signin-email" name="email" type="email" autocomplete="email" required />
+        <button class="button button-primary demo-signin" id="send-magic-link" type="submit">
+          Send sign-in link
+        </button>
+      </form>
+      <p class="signin-message" id="signin-message" role="status" aria-live="polite"></p>
+      <p class="demo-disclaimer">
+        Supabase will email a one-time sign-in link. Your quiz is private to your account.
+      </p>
+    </dialog>
+  </body>
+</html>

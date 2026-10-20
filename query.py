@@ -30,15 +30,20 @@ def main():
 
     # --------------------------------------------------
     # READ
-    # Show the top 10 students based on GPA
+    # Show 10 recent meal records
     # --------------------------------------------------
 
-    print("\nTop 10 students by GPA:")
+    print("\n10 recent meals:")
 
     cur.execute("""
-        SELECT student_id, first_name, last_name, grade_level, gpa
-        FROM students
-        ORDER BY gpa DESC, last_name ASC
+        SELECT
+            meal_id,
+            student_id,
+            meal_date,
+            meal_item,
+            price
+        FROM meals
+        ORDER BY meal_date DESC, meal_id ASC
         LIMIT 10;
     """)
 
@@ -46,76 +51,93 @@ def main():
         print(row)
 
     try:
+
         # --------------------------------------------------
         # CREATE
-        # Insert a new student
+        # Add a new meal for an existing student
         # --------------------------------------------------
 
-        print("\nInserting a new student...")
+        print("\nInserting a new meal...")
 
         cur.execute("""
-            INSERT INTO students
-                (student_id, first_name, last_name, grade_level, gpa)
+            INSERT INTO meals
+                (meal_id, student_id, meal_date, meal_item, price)
             VALUES
                 (%s, %s, %s, %s, %s)
-            RETURNING student_id, first_name, last_name, grade_level, gpa;
+            RETURNING
+                meal_id,
+                student_id,
+                meal_date,
+                meal_item,
+                price;
         """, (
-            "student_101",
-            "Emily",
-            "Carter",
-            "Grade 11",
-            3.75
+            "M_TEST_001",
+            "student_001",
+            "2026-10-20",
+            "Cheese Pizza",
+            4.25
         ))
 
         print("Inserted:", cur.fetchone())
 
         # --------------------------------------------------
         # UPDATE
-        # Update the GPA of an existing student
+        # Change the meal item and price
         # --------------------------------------------------
 
-        print("\nUpdating GPA for student_001...")
+        print("\nUpdating M_TEST_001...")
 
         cur.execute("""
-            UPDATE students
-            SET gpa = 3.85
-            WHERE student_id = %s
-            RETURNING student_id, first_name, last_name, gpa;
-        """, ("student_001",))
+            UPDATE meals
+            SET
+                meal_item = %s,
+                price = %s
+            WHERE meal_id = %s
+            RETURNING
+                meal_id,
+                student_id,
+                meal_item,
+                price;
+        """, (
+            "Chicken Rice Bowl",
+            5.25,
+            "M_TEST_001"
+        ))
 
         print("Updated:", cur.fetchone())
 
         # --------------------------------------------------
         # DELETE
-        # Delete the student with the lowest GPA
+        # Remove the test meal
         # --------------------------------------------------
 
-        print("\nDeleting student with the lowest GPA...")
+        print("\nDeleting M_TEST_001...")
 
         cur.execute("""
-            DELETE FROM students
-            WHERE student_id = (
-                SELECT student_id
-                FROM students
-                ORDER BY gpa ASC, student_id ASC
-                LIMIT 1
-            )
-            RETURNING student_id, first_name, last_name, gpa;
-        """)
+            DELETE FROM meals
+            WHERE meal_id = %s
+            RETURNING
+                meal_id,
+                student_id,
+                meal_item,
+                price;
+        """, ("M_TEST_001",))
 
         print("Deleted:", cur.fetchone())
 
-        # Save CREATE, UPDATE, and DELETE
+        # Save all changes
         conn.commit()
 
         print("\nChanges committed.")
 
     except errors.InsufficientPrivilege as e:
-        # This happens if the database connection is read-only
+
         conn.rollback()
 
-        print("\nWrite blocked by the database:",
-              str(e).strip().splitlines()[0])
+        print(
+            "\nWrite blocked by the database:",
+            str(e).strip().splitlines()[0]
+        )
 
         print(
             "This connection is read-only, so "
