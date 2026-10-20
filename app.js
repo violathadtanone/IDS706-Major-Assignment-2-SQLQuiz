@@ -267,6 +267,7 @@ let signedIn = false;
 let answerChecked = false;
 let savedProgress = {};
 let client = null;
+let initializationError = "";
 
 function showFeedback(message, type = "") {
   feedback.textContent = message;
@@ -525,7 +526,7 @@ async function signInWithEmail(event) {
   event.preventDefault();
   if (!client) {
     setSignInMessage(
-      "Supabase is not configured. Add your Supabase URL and publishable key in the deployment settings.",
+      initializationError || "Supabase could not initialize. Reload the page and try again.",
       "error",
     );
     return;
@@ -721,13 +722,18 @@ signOutButton.addEventListener("click", signOut);
 signInForm.addEventListener("submit", signInWithEmail);
 
 const config = window.SUPABASE_CONFIG ?? {};
-if (
-  window.supabase?.createClient &&
+const hasSupabaseConfig =
   typeof config.url === "string" &&
   typeof config.anonKey === "string" &&
   config.url.startsWith("https://") &&
-  config.anonKey.length > 0
-) {
+  config.anonKey.length > 0;
+if (typeof window.supabase?.createClient !== "function") {
+  initializationError = "The Supabase JavaScript library did not load. Reload the page and check whether the CDN script is blocked or failed in your browser's Network tab.";
+  setSignInMessage(initializationError, "error");
+} else if (!hasSupabaseConfig) {
+  initializationError = "Supabase configuration is missing or invalid. Check that supabase-config.js sets window.SUPABASE_CONFIG.url to an HTTPS Project URL and window.SUPABASE_CONFIG.anonKey to your publishable key.";
+  setSignInMessage(initializationError, "error");
+} else {
   client = window.supabase.createClient(config.url, config.anonKey, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
   });
@@ -741,10 +747,6 @@ if (
     }
     applySession(data.session);
   });
-} else {
-  setSignInMessage(
-    "Supabase configuration is missing. The quiz remains locked until the deployment is configured.",
-  );
 }
 
 updateAuthControls();
