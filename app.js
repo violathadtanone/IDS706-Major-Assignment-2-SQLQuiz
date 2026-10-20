@@ -5,8 +5,6 @@ const quizzes = {
     level: "EASY",
     prompt:
       "Who are the 10 students with the highest GPA? Return each student's ID, name, grade level, and GPA, ordered from highest to lowest.",
-    starter:
-      "SELECT student_id, first_name, last_name, grade_level, gpa\nFROM students\nORDER BY gpa DESC\nLIMIT 10;",
     solution: `SELECT
     student_id,
     first_name,
@@ -51,8 +49,6 @@ LIMIT 10;`,
     level: "MEDIUM",
     prompt:
       "Calculate the average GPA for students at each school. Show the school name and the average rounded to two decimal places, highest average first.",
-    starter:
-      "SELECT s.school_name, ROUND(AVG(st.gpa), 2) AS average_gpa\nFROM schools s\nJOIN students st ON s.school_id = st.school_id\n-- Group by school and order by the average",
     solution: `SELECT
     s.school_name,
     ROUND(AVG(st.gpa), 2) AS average_gpa
@@ -100,8 +96,6 @@ ORDER BY average_gpa DESC;`,
     level: "MEDIUM",
     prompt:
       "All students in this dataset are enrolled in the free lunch program. Find the five schools with the most participating students, from the largest student count to the smallest.",
-    starter:
-      "SELECT s.school_name, COUNT(st.student_id) AS student_count\nFROM schools s\nJOIN students st ON s.school_id = st.school_id\n-- Group by school, sort by count, and return 5",
     solution: `SELECT
     s.school_name,
     COUNT(st.student_id) AS student_count
@@ -146,8 +140,6 @@ LIMIT 5;`,
     level: "ADVANCED",
     prompt:
       "For each city, calculate the average price of a recorded student meal. Show the city and average lunch cost rounded to two decimals, highest first.",
-    starter:
-      "SELECT s.city, ROUND(AVG(m.price), 2) AS average_lunch_cost\nFROM schools s\nJOIN students st ON s.school_id = st.school_id\nJOIN meals m ON st.student_id = m.student_id\n-- Group by city and order by the average",
     solution: `SELECT
     s.city,
     ROUND(AVG(m.price), 2) AS average_lunch_cost
@@ -193,8 +185,6 @@ ORDER BY average_lunch_cost DESC;`,
     level: "ADVANCED",
     prompt:
       "Find the 10 schools with the highest total cost of recorded meal transactions. Include school, city, number of meals, and total lunch cost rounded to two decimals.",
-    starter:
-      "SELECT s.school_name, s.city, COUNT(m.meal_id) AS total_meals,\n       ROUND(SUM(m.price), 2) AS total_lunch_cost\nFROM schools s\nJOIN students st ON s.school_id = st.school_id\nJOIN meals m ON st.student_id = m.student_id\n-- Group by school, sort by cost, and return 10",
     solution: `SELECT
     s.school_name,
     s.city,
@@ -414,6 +404,7 @@ function renderTable(headers, rows, container) {
 }
 
 function renderHint(quiz) {
+  document.querySelector("#hint-card").open = false;
   document.querySelector("#hint-sql").textContent = quiz.solution;
   document.querySelector("#hint-result-description").textContent =
     quiz.resultDescription;
@@ -451,7 +442,7 @@ function renderQuiz(quizId) {
   renderHint(quiz);
 
   const saved = signedIn ? savedProgress[quizId] : null;
-  editor.value = saved?.query_text ?? quiz.starter;
+  editor.value = saved?.query_text ?? "";
   paramsInput.value = saved?.parameters
     ? JSON.stringify(saved.parameters)
     : "";
