@@ -89,12 +89,12 @@ DB_SSLMODE=require
 - It is intended for setting up a new or empty Supabase database.
 
 ### 3. requirements.txt
-- Create a new file called `requirements.text` in the project root and add packages below in the file.
+- Create a new file called `requirements.txt` in the project root and add packages below in the file.
 ```
 psycopg2-binary
 python-dotenv
 ```
-- Install the requirements in the visual environment `(.venv) (base)` with the code below in Terminal:
+- Install the requirements in the virtual environment `(.venv) (base)` with the code below in Terminal:
 ```bash
 python -m pip install -r requirements.txt
 ```
@@ -115,7 +115,7 @@ python -m pip install -r requirements.txt
 
 ![Diagram](images/project-architecture.svg)
 The project uses a simple three-part setup:
-- Local development: query.py connects to the hosted PostgreSQL database using credentials stored in .env. The connection uses the Supabase Session Pooler with SSL.
+- Local development: query.py connects to the hosted PostgreSQL database using credentials stored in .env. The connection uses the Supabase Session Pooler with sslmode=require.
 - Supabase: PostgreSQL stores the schools, students, and meals tables. Supabase also provides authentication and the backend used to run and save quiz queries.
 - GitHub: GitHub Pages hosts the quiz website, while GitHub Actions verifies that the hosted database is reachable using a GitHub Secret.
 
@@ -128,16 +128,17 @@ The project uses a simple three-part setup:
 - Verify hosted database workflow checks that GitHub can connect to the hosted Supabase PostgreSQL database and that the students table contains data.
 - Database connection is stored as a GitHub repository secret named: DATABASE_URL
 - Workflow uses the Supabase Session Pooler connection with SSL. Database passwords are not stored in the workflow file or committed to GitHub.
+- Workflow runs automatically on pushes to main and can also be started manually from the GitHub Actions tab.
 
 ### 3. Additional features
-- Parameterized queries: Application-owned database operations use SQL parameters rather than building SQL with f-strings or string concatenation. This helps protect against SQL injection.
-- Audit logging: Query runs and saved quiz answers are recorded in quiz_audit_log, including who performed the action, what was run or saved, and when it happened.
-- Audit-log integrity: Restricted quiz role cannot modify the audit history. Direct attempts to UPDATE, DELETE, or TRUNCATE the audit log are blocked by PostgreSQL permissions.
+- Parameterized queries: Application-owned database operations use parameters rather than f-string or string-concatenated SQL, helping reduce SQL injection risk.  
+- Audit logging: Query runs and saved quiz answers are recorded in quiz_audit_log, including who performed the action, what was run or saved, and when it occurred.  
+- Audit-log integrity: The restricted quiz role cannot modify the audit history. Direct UPDATE, DELETE, and TRUNCATE attempts are blocked by PostgreSQL permissions.
 
 
 ## SQL Quiz Instructions
 1. Open https://violathadtanone.github.io/IDS706-Major-Assignment-2-SQLQuiz/
-2. Click sign in and confirm Magic Link send to your email.
+2. Click sign in and open Magic Link sent to your email.
 3. Select one of the five SQL questions.
 4. Write a SQL query in the query editor.
 5. Use Run Query to view the results from the live Supabase database.
