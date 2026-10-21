@@ -124,7 +124,7 @@ function setup(
     "Response",
     source + `
     return { signInWithEmail, applySession,
-      runQuery, saveQuiz, checkAnswer, invokeApi, renderQuiz, quizzes, questionIds, loadSavedProgress,
+      runQuery, saveQuiz, checkAnswer, answersMatch, invokeApi, renderQuiz, quizzes, questionIds, loadSavedProgress,
       points() { return earnedQuestions.size * 4; },
       useClient(value) { client = value; },
       isSignedIn() { return signedIn; }
@@ -638,4 +638,95 @@ Deno.test("older query completion cannot unlock a newer pending run", async () =
       !get("#run-query").disabled,
     "New query did not complete normally",
   );
+});
+
+
+Deno.test("all five result comparisons accept aliases and tied rankings while preserving exact table requirements", () => {
+  const { app } = setup();
+  for (const id of app.questionIds) {
+    const quiz = app.quizzes[id];
+    const expected = { columns: quiz.headers, rows: quiz.rows, truncated: false };
+    const copy = () => ({
+      columns: quiz.headers.map((_, index) => `different_alias_${index}`),
+      rows: quiz.rows.map((row) => [...row]),
+      truncated: false,
+    });
+    const actual = copy();
+    actual.rows = actual.rows.map((row) => row.map((cell) =>
+      /^-?\d+(?:\.\d+)?$/.test(cell) ? Number(cell) : cell));
+    assert(app.answersMatch(actual, expected), `${id}: aliases and numeric types should pass`);
+    // Reverse rows within each equal ranking group; their relative order is unspecified.
+    const tied = copy();
+    for (let start = 0; start < tied.rows.length;) {
+      let end = start + 1;
+      while (end < tied.rows.length && tied.rows[end].at(-1) === tied.rows[start].at(-1)) end++;
+      tied.rows.splice(start, end - start, ...tied.rows.slice(start, end).reverse());
+      start = end;
+    }
+    assert(app.answersMatch(tied, expected), `${id}: ties should pass`);
+    const reversed = copy();
+    reversed.rows.reverse();
+    assert(!app.answersMatch(reversed, expected), `${id}: ascending order should fail`);
+    const duplicate = copy();
+    duplicate.rows[duplicate.rows.length - 1] = [...duplicate.rows[0]];
+    assert(!app.answersMatch(duplicate, expected), `${id}: duplicate-count mismatch should fail`);
+    const missing = copy(); missing.rows.pop();
+    assert(!app.answersMatch(missing, expected), `${id}: missing row should fail`);
+    const extra = copy(); extra.rows.push([...extra.rows[0]]);
+    assert(!app.answersMatch(extra, expected), `${id}: extra row should fail`);
+    const misplaced = copy();
+    misplaced.rows = misplaced.rows.map((row) => row.reverse());
+    assert(!app.answersMatch(misplaced, expected), `${id}: wrong column positions should fail`);
+    const wrongText = copy(); wrongText.rows[0][0] += " incorrect";
+    assert(!app.answersMatch(wrongText, expected), `${id}: wrong text should fail`);
+    const wrongNumber = copy();
+    wrongNumber.rows[0][wrongNumber.columns.length - 1] = Number(wrongNumber.rows[0].at(-1)) + 0.001;
+    assert(!app.answersMatch(wrongNumber, expected), `${id}: wrong numeric value should fail`);
+    const extraColumn = copy(); extraColumn.columns.push("extra");
+    assert(!app.answersMatch(extraColumn, expected), `${id}: extra column should fail`);
+    const truncated = copy(); truncated.truncated = true;
+    assert(!app.answersMatch(truncated, expected), `${id}: truncated result should fail`);
+  }
+});
+
+Deno.test("numeric tolerance accepts representation noise only, with strict ordering and one-to-one rows", () => {
+  const { app } = setup();
+  const result = (rows) => ({ columns: ["label", "metric"], rows, truncated: false });
+  const compare = (actual, expected) => app.answersMatch(result(actual), result(expected));
+  assert(compare([["A", 0.1 + 0.2]], [["A", "0.30"]]), "Floating-point representation should pass");
+  assert(compare([["A", 5e-13]], [["A", "0.00"]]), "Sub-tolerance difference should pass");
+  assert(!compare([["A", 2e-12]], [["A", "0.00"]]), "Above-tolerance difference should fail");
+  assert(!compare([["A", 4.574]], [["A", "4.57"]]), "Unrounded result should fail");
+  assert(!compare([["A", 1000000000.001]], [["A", "1000000000.00"]]), "Tolerance must not grow with magnitude");
+  assert(!compare([["A", null]], [["A", 0]]), "NULL must not equal zero");
+  assert(!compare([["A", Infinity]], [["A", Infinity]]), "Non-finite numbers should fail");
+  assert(!compare([["A", 0.3], ["B", 0.3 + 5e-13]], [["A", 0.3], ["B", 0.3]]), "Required descending ordering must remain strict");
+  assert(compare([["A", 0.75e-12], ["A", -0.5e-12]], [["A", 0], ["A", 1.5e-12]]), "Overlapping candidates require one-to-one reassignment");
+  assert(!compare([["A", 0], ["A", 0]], [["A", 0], ["A", 2e-12]]), "A matched row cannot be reused for another duplicate");
+});
+
+Deno.test("Check my SQL awards each question for different aliases and a derived-table structure", async () => {
+  const { app, get, session, requests } = setup({
+    invokeHook(body) {
+      if (body.action !== "run") return;
+      const quiz = app.quizzes[body.questionId];
+      return { data: {
+        columns: quiz.headers.map((_, index) => `alias_${index}`),
+        rows: quiz.rows.map((row) => [...row]), truncated: false,
+      }, error: null };
+    },
+  });
+  await app.applySession(session);
+  for (const id of app.questionIds) {
+    app.renderQuiz(id);
+    const quiz = app.quizzes[id];
+    const selected = quiz.headers.map((name, index) => `q.${name} AS alias_${index}`).join(", ");
+    const query = `select ${selected} from (${quiz.solution.replace(/;$/, "")}) q order by ${quiz.headers.length} desc`;
+    assert(query !== quiz.solution, "Test must use different SQL");
+    get("#sql-editor").value = query;
+    await app.checkAnswer();
+    assert(get("#feedback-message").textContent.startsWith("Correct!"), `${id}: equivalent output should pass`);
+    assert(requests.some(([action, body]) => action === "run" && body.query === query), "Student SQL must be sent for execution unchanged");
+  }
+  assert(app.points() === 20, "Equivalent outputs should earn all 20 points");
 });

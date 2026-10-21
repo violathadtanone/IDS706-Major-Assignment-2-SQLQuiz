@@ -195,6 +195,17 @@ function normalizeValue(value: unknown): unknown {
   return value;
 }
 
+export function serializeQueryResult(columns: string[], rows: unknown[][]) {
+  if (columns.length > maximumColumns) {
+    throw new Error("The query returned too many columns.");
+  }
+  return {
+    columns,
+    rows: rows.slice(0, maximumRows).map((row) => row.map(normalizeValue)),
+    truncated: rows.length > maximumRows,
+  };
+}
+
 async function executeReadOnlyQuery(
   query: string,
   parameters: SqlParameter[],
@@ -218,19 +229,9 @@ async function executeReadOnlyQuery(
       const boundedQuery = `SELECT * FROM (${query}) AS quiz_result LIMIT ${
         maximumRows + 1
       }`;
-      const result = await transaction.unsafe(boundedQuery, parameters);
-      const columns = result.columns.map((column) => column.name);
-      if (columns.length > maximumColumns) {
-        throw new Error("The query returned too many columns.");
-      }
-
-      return {
-        columns,
-        rows: result
-          .slice(0, maximumRows)
-          .map((row) => columns.map((column) => normalizeValue(row[column]))),
-        truncated: result.length > maximumRows,
-      };
+      // Array mode retains each output position even when aliases repeat.
+      const result = await transaction.unsafe(boundedQuery, parameters).values();
+      return serializeQueryResult(result.columns.map((column) => column.name), result);
     });
   } finally {
     await database.end({ timeout: 1 });

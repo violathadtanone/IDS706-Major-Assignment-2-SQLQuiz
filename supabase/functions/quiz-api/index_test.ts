@@ -47,6 +47,21 @@ Deno.test("accepts a quiz aggregation over the permitted dataset", () => {
   );
 });
 
+Deno.test("existing guard accepts alternate read-only structures and repeated aliases", () => {
+  for (const sql of [
+    `select q.student_id as id, q.first_name as given_name, q.last_name as family_name,
+       q.grade_level as grade, q.gpa as score
+     from (select * from students) q order by q.gpa desc limit 10`,
+    `SELECT s.school_name AS label,
+       ROUND((SELECT AVG(st.gpa) FROM students st WHERE st.school_id = s.school_id), 2) AS score
+     FROM schools s WHERE (SELECT COUNT(*) FROM students st WHERE st.school_id = s.school_id) > 0
+     ORDER BY score DESC`,
+    `SELECT student_id AS repeated, first_name AS repeated FROM students`,
+  ]) {
+    guardReadOnlyQuery(sql, []);
+  }
+});
+
 Deno.test("rejects writes and multiple statements", () => {
   assertThrows(
     () => guardReadOnlyQuery("DELETE FROM students", []),
@@ -174,8 +189,33 @@ Deno.test("backend service and audit failures return controlled JSON/CORS errors
       handler = callback;
       return {};
     }) as typeof Deno.serve;
-    await import("./index.ts");
+    const { serializeQueryResult } = await import("./index.ts");
     Deno.serve = originalServe;
+    await t.step("positional serialization preserves distinct cells with repeated aliases", () => {
+      const result = serializeQueryResult(["same", "same", "same", "same"], [
+        ["student_074", "Lucas", 3.97, null],
+        ["student_081", "Henry", 3.92, null],
+      ]);
+      if (JSON.stringify(result) !== JSON.stringify({
+        columns: ["same", "same", "same", "same"],
+        rows: [["student_074", "Lucas", 3.97, null], ["student_081", "Henry", 3.92, null]],
+        truncated: false,
+      })) throw new Error("Repeated aliases lost distinct positional values");
+      const normalized = serializeQueryResult(["same", "same"], [[1n, new Date("2026-10-20T00:00:00Z")]]);
+      if (normalized.rows[0][0] !== "1" || normalized.rows[0][1] !== "2026-10-20T00:00:00.000Z") {
+        throw new Error("Positional serialization changed value normalization");
+      }
+    });
+    await t.step("positional serialization preserves result bounds", () => {
+      const result = serializeQueryResult(["value"], Array.from({ length: 501 }, (_, i) => [i]));
+      if (!result.truncated || result.rows.length !== 500 || result.rows[499][0] !== 499) {
+        throw new Error("Result row bounds changed");
+      }
+      let rejected = false;
+      try { serializeQueryResult(Array(41).fill("same"), []); }
+      catch { rejected = true; }
+      if (!rejected) throw new Error("Column bound changed");
+    });
     Deno.env.get = (name: string) => {
       if (mode === "missing-service" && name === "SUPABASE_SERVICE_ROLE_KEY") {
         return undefined;

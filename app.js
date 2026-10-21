@@ -763,10 +763,36 @@ function answersMatch(actual, expected) {
     }
     return value;
   };
-  const rowKey = (row) => JSON.stringify(row.map(normalize));
-  const actualRows = actual.rows.map(rowKey).sort();
-  const expectedRows = expected.rows.map(rowKey).sort();
-  if (!actualRows.every((row, index) => row === expectedRows[index])) return false;
+  // Absolute tolerance only: never scale the allowance with the value.
+  const numericTolerance = 1e-12;
+  const cellsMatch = (left, right) => {
+    left = normalize(left);
+    right = normalize(right);
+    if (typeof left === "number" && typeof right === "number") {
+      return Number.isFinite(left) && Number.isFinite(right) &&
+        Math.abs(left - right) <= numericTolerance;
+    }
+    return left === right;
+  };
+  const rowsMatch = (left, right) => left.length === expected.columns.length &&
+    right.length === expected.columns.length &&
+    left.every((value, column) => cellsMatch(value, right[column]));
+  // One-to-one matching preserves duplicate counts. Reassign earlier matches
+  // when tolerance makes multiple rows eligible, rather than matching greedily.
+  const owners = Array(expected.rows.length).fill(-1);
+  const match = (actualIndex, visited) => {
+    for (let expectedIndex = 0; expectedIndex < expected.rows.length; expectedIndex++) {
+      if (visited.has(expectedIndex) ||
+          !rowsMatch(actual.rows[actualIndex], expected.rows[expectedIndex])) continue;
+      visited.add(expectedIndex);
+      if (owners[expectedIndex] === -1 || match(owners[expectedIndex], visited)) {
+        owners[expectedIndex] = actualIndex;
+        return true;
+      }
+    }
+    return false;
+  };
+  if (!actual.rows.every((_, index) => match(index, new Set()))) return false;
   const metricIndex = expected.columns.length - 1;
   return actual.rows.every((row, index, rows) => index === 0 ||
     Number(rows[index - 1][metricIndex]) >= Number(row[metricIndex]));
