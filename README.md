@@ -71,10 +71,10 @@ python -m pip install --upgrade pip
 - Follow https://nodejs.org/en/download to install Node.js
 <br><br>
 
-## Supabase Setup Instructions - Create pre-requisite file
+## Supabase Setup Instructions - Create pre-requisite files
 ### 1. .env
 - This stores the local database connection settings used by the application and scripts. 
-- After creating the Supabase database, open the Session Pooler connection details in Supabase and use those values to complete this file.
+- After creating the Supabase database, open the Session Pooler connection details in Supabase and use those values to fill in the value based on the format below:
 ```
 POSTGRES_DB=postgres
 POSTGRES_USER=postgres.<your-project-ref>
@@ -129,6 +129,11 @@ The project uses a simple three-part setup:
 - Database connection is stored as a GitHub repository secret named: DATABASE_URL
 - Workflow uses the Supabase Session Pooler connection with SSL. Database passwords are not stored in the workflow file or committed to GitHub.
 
+### 3. Additional features
+- Parameterized queries: Application-owned database operations use SQL parameters rather than building SQL with f-strings or string concatenation. This helps protect against SQL injection.
+- Audit logging: Query runs and saved quiz answers are recorded in quiz_audit_log, including who performed the action, what was run or saved, and when it happened.
+- Audit-log integrity: Restricted quiz role cannot modify the audit history. Direct attempts to UPDATE, DELETE, or TRUNCATE the audit log are blocked by PostgreSQL permissions.
+
 
 ## SQL Quiz Instructions
 1. Open https://violathadtanone.github.io/IDS706-Major-Assignment-2-SQLQuiz/
@@ -139,13 +144,3 @@ The project uses a simple three-part setup:
 6. Use the hint when needed to compare the expected SQL approach and expected result.
 7. Use Check My SQL to check the returned result.
 8. Save quiz progress while signed in.
-
-
- 
-The repository README must include the URL of your quiz site and must be detailed enough for another person to understand how the system is set up and how to use it.
-
-Queries use parameters rather than f-string SQL (safe from injection).
-An audit log of who ran or saved what.
-An integrity check so the taker role cannot edit that log.
-For Supabase, use the Session pooler (not the Direct connection) and sslmode=require.
-Keep .env on your machine and listed in .gitignore. CI must read GitHub Secrets.
