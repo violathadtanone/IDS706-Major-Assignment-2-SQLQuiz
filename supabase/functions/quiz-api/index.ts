@@ -1,5 +1,6 @@
 import { createClient, type User } from "npm:@supabase/supabase-js@2.118.0";
 import postgres from "npm:postgres@3.4.5";
+import { getLoginSession } from "./login-session.ts";
 import {
   guardReadOnlyQuery,
   SqlGuardError,
@@ -44,6 +45,7 @@ interface RunAudit {
 }
 
 class RequestBodyTooLargeError extends Error {}
+class AuditWriteError extends Error {}
 
 function response(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: corsHeaders });
@@ -171,7 +173,7 @@ async function insertRunAudit(entry: RunAudit): Promise<void> {
   );
   if (error) {
     console.error("Could not append quiz audit record.", error.code);
-    throw new Error(
+    throw new AuditWriteError(
       "The audit log is unavailable; the query result was not returned.",
     );
   }
@@ -335,6 +337,33 @@ async function handleRun(user: User, body: QuizRequest): Promise<Response> {
   return response(200, result);
 }
 
+async function handleLogin(request: Request, user: User): Promise<Response> {
+  let sessionId: string;
+  try {
+    if (!user.email) throw new Error("An email login is required.");
+    sessionId = getLoginSession(request, user.id);
+  } catch (error) {
+    return response(400, {
+      error: error instanceof Error ? error.message : "Invalid login session.",
+    });
+  }
+
+  // Ignore repeats for the same Auth session; never overwrite its timestamp.
+  // Identity/session/method are not accepted from the browser's request body.
+  try {
+    const { error } = await getServiceClient().from("login_transactions").upsert({
+      session_id: sessionId,
+      user_id: user.id,
+      authentication_method: "email_otp",
+    }, { onConflict: "session_id", ignoreDuplicates: true });
+    if (error) throw error;
+    return response(200, { recorded: true });
+  } catch {
+    console.error("Could not record quiz-app login.");
+    return response(500, { error: "The login transaction could not be recorded." });
+  }
+}
+
 Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -378,14 +407,28 @@ Deno.serve(async (request: Request) => {
     return response(401, { error: "Sign in before using the quiz backend." });
   }
 
-  if (body.action === "load") {
-    return handleLoad(user);
-  }
-  if (body.action === "save") {
-    return handleSave(user, body);
-  }
-  if (body.action === "run") {
-    return handleRun(user, body);
+  try {
+    // Await handlers here so rejected service/audit requests receive JSON/CORS
+    // errors instead of escaping as generic Edge Function failures.
+    if (body.action === "login") {
+      return await handleLogin(request, user);
+    }
+    if (body.action === "load") {
+      return await handleLoad(user);
+    }
+    if (body.action === "save") {
+      return await handleSave(user, body);
+    }
+    if (body.action === "run") {
+      return await handleRun(user, body);
+    }
+  } catch (error) {
+    console.error("Quiz backend request failed.", error instanceof Error ? error.name : "unknown");
+    return response(503, {
+      error: error instanceof AuditWriteError
+        ? "The quiz audit log is unavailable. No successful query result was returned. Please try again."
+        : "The quiz backend is temporarily unavailable. Please try again.",
+    });
   }
   return response(400, { error: "Choose a supported quiz action." });
 });

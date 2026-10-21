@@ -135,11 +135,11 @@ ORDER BY average_lunch_cost DESC;`,
     resultDescription:
       "Average meal transaction price in each city represented in the meal records.",
     rows: [
-      ["Asheville", "4.56"],
+      ["Asheville", "4.57"],
       ["Raleigh", "4.53"],
       ["Charlotte", "4.53"],
-      ["Greensboro", "4.52"],
       ["Durham", "4.52"],
+      ["Greensboro", "4.52"],
     ],
   },
   "school-cost": {
@@ -216,6 +216,14 @@ let checkingAnswer = false;
 let savedProgress = {};
 let client = null;
 let initializationError = "";
+let pendingSignInEmail = null;
+let activeSessionKey = null;
+let sessionInitialization = null;
+let authGeneration = 0;
+let viewRevision = 0;
+let editorRevision = 0;
+let activeRun = null;
+const savesInFlight = new Set();
 
 function showFeedback(message, type = "") {
   feedback.textContent = message;
@@ -272,8 +280,9 @@ function updateLineNumbers() {
 
 function updateSaveButton() {
   const alreadySaved = Boolean(savedProgress[currentQuizId]);
-  saveButton.disabled = !signedIn;
-  saveButton.textContent = alreadySaved ? "Update saved query" : "Save quiz";
+  const saving = savesInFlight.has(`${authGeneration}:${currentQuizId}`);
+  saveButton.disabled = !signedIn || saving;
+  saveButton.textContent = saving ? "Saving…" : alreadySaved ? "Update saved query" : "Save quiz";
 }
 
 function scoreStorageKey() {
@@ -318,6 +327,13 @@ function updateProgress() {
     `QUESTION ${currentComplete ? "✓" : quiz.number} <span>•</span> ${quiz.level}${currentComplete ? " · CORRECT" : ""}`;
 }
 
+function updateRunButton() {
+  const running = activeRun?.auth === authGeneration && activeRun?.view === viewRevision;
+  runButton.disabled = !signedIn || running;
+  runButton.innerHTML = running ? "Running…" :
+    '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4.5 8 5.5-8 5.5z" /></svg> Run query';
+}
+
 function updateAuthControls() {
   const dot = document.createElement("span");
   dot.className = "status-dot";
@@ -332,7 +348,7 @@ function updateAuthControls() {
   document.querySelector("#signin-callout").classList.toggle("is-hidden", signedIn);
   editor.readOnly = !signedIn;
   paramsInput.disabled = !signedIn;
-  runButton.disabled = !signedIn;
+  updateRunButton();
   checkButton.disabled = !signedIn || checkingAnswer;
   saveButton.disabled = !signedIn;
   editorAccess.textContent = signedIn ? "Signed-in workspace · editable" : "Sign in to edit";
@@ -404,6 +420,7 @@ function clearResults() {
 }
 
 function renderQuiz(quizId) {
+  viewRevision++;
   currentQuizId = quizId;
   const quiz = getCurrentQuiz();
   document.querySelector("#challenge-kicker").innerHTML =
@@ -440,11 +457,15 @@ function renderQuiz(quizId) {
   updateAuthControls();
 }
 
-async function invokeApi(body) {
-  if (!client || !signedIn) {
+async function invokeApi(body, loginSession = null) {
+  // Only login recording may run before the quiz UI is unlocked. The backend
+  // still validates the supplied bearer token; browser state grants no access.
+  if (!client || (!signedIn && !(body.action === "login" && loginSession?.access_token))) {
     throw new Error("Sign in before using the quiz backend.");
   }
-  const { data, error } = await client.functions.invoke("quiz-api", { body });
+  const options = { body };
+  if (loginSession) options.headers = { Authorization: `Bearer ${loginSession.access_token}` };
+  const { data, error } = await client.functions.invoke("quiz-api", options);
   if (error) {
     let message = error.message || "The quiz backend request failed.";
     if (error.context instanceof Response) {
@@ -468,12 +489,19 @@ async function loadSavedProgress() {
     updateProgress();
     return;
   }
+  const auth = authGeneration;
+  const view = viewRevision;
+  const revision = editorRevision;
+  const query = editor.value;
+  const rawParameters = paramsInput.value;
   try {
     const data = await invokeApi({ action: "load" });
+    if (!signedIn || auth !== authGeneration) return;
     savedProgress = Object.fromEntries(
       (data.progress ?? []).map((entry) => [entry.question_id, entry]),
     );
-    if (savedProgress[currentQuizId]) {
+    if (savedProgress[currentQuizId] && view === viewRevision &&
+        revision === editorRevision && query === editor.value && rawParameters === paramsInput.value) {
       editor.value = savedProgress[currentQuizId].query_text;
       paramsInput.value = JSON.stringify(savedProgress[currentQuizId].parameters ?? []);
       updateLineNumbers();
@@ -481,24 +509,79 @@ async function loadSavedProgress() {
     updateProgress();
     updateSaveButton();
   } catch (error) {
-    showFeedback(`Could not load saved quizzes: ${error.message}`, "error");
+    if (signedIn && auth === authGeneration && view === viewRevision) {
+      showFeedback(`Could not load saved quizzes: ${error.message}`, "error");
+    }
   }
 }
 
 async function applySession(session) {
-  const previousUserId = currentUser?.id;
-  currentUser = session?.user ?? null;
-  signedIn = Boolean(currentUser);
-  if (previousUserId !== currentUser?.id) loadEarnedPoints();
-  if (!signedIn) {
+  if (!session?.user) {
+    authGeneration++;
+    activeSessionKey = null;
+    sessionInitialization = null;
+    currentUser = null;
+    signedIn = false;
     savedProgress = {};
+    loadEarnedPoints();
+    renderQuiz(currentQuizId);
+    return false;
   }
-  updateAuthControls();
+  let key;
+  try {
+    const payload = session.access_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const claims = JSON.parse(atob(payload.padEnd(Math.ceil(payload.length / 4) * 4, "=")));
+    if (!claims.session_id) throw new Error("Missing session identifier");
+    key = `${session.user.id}:${claims.session_id}`;
+  } catch {
+    setSignInMessage("The sign-in session is invalid. Request a new email code.", "error");
+    return false;
+  }
+  // Token refreshes and repeated callbacks for this session preserve drafts,
+  // results and points. A reload retries the same idempotent backend insert.
+  if (signedIn && activeSessionKey === key) {
+    currentUser = session.user;
+    updateAuthControls();
+    return true;
+  }
+  if (sessionInitialization?.key === key) return sessionInitialization.promise;
+  const generation = ++authGeneration;
+  currentUser = null;
+  signedIn = false;
+  activeSessionKey = null;
+  savedProgress = {};
+  loadEarnedPoints();
   renderQuiz(currentQuizId);
-  if (signedIn) {
-    await loadSavedProgress();
-    setSignInMessage("");
-  }
+  const promise = (async () => {
+    try {
+      await invokeApi({ action: "login" }, session);
+      if (generation !== authGeneration) return false;
+      currentUser = session.user;
+      signedIn = true;
+      activeSessionKey = key;
+      loadEarnedPoints();
+      if (signInDialog.open) signInDialog.close();
+      pendingSignInEmail = null;
+      document.querySelector("#signin-code").value = "";
+      document.querySelector("#signin-code-form").hidden = true;
+      document.querySelector("#send-magic-link").textContent = "Send verification code";
+      renderQuiz(currentQuizId);
+      setSignInMessage("");
+      await loadSavedProgress();
+      return true;
+    } catch (error) {
+      if (generation === authGeneration) {
+        const message = `Your authentication succeeded, but the login transaction could not be recorded: ${error.message}. Reload to retry; the quiz remains locked.`;
+        setSignInMessage(message, "error");
+        showFeedback(message, "error");
+      }
+      return false;
+    } finally {
+      if (sessionInitialization?.generation === generation) sessionInitialization = null;
+    }
+  })();
+  sessionInitialization = { key, generation, promise };
+  return promise;
 }
 
 async function signInWithEmail(event) {
@@ -513,24 +596,65 @@ async function signInWithEmail(event) {
 
   const email = document.querySelector("#signin-email").value.trim();
   const button = document.querySelector("#send-magic-link");
+  if (button.disabled) return;
   button.disabled = true;
+  document.querySelector("#verify-code").disabled = true;
   button.textContent = "Sending…";
   setSignInMessage("");
   try {
-    const redirectTo = window.location.href.split(/[?#]/, 1)[0];
-    const { error } = await client.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: redirectTo },
-    });
+    const { error } = await client.auth.signInWithOtp({ email });
     if (error) {
       throw error;
     }
-    setSignInMessage("Check your email for a one-time sign-in link.", "success");
+    if (document.querySelector("#signin-email").value.trim() !== email) return;
+    pendingSignInEmail = email;
+    document.querySelector("#signin-code").value = "";
+    document.querySelector("#signin-code-form").hidden = false;
+    document.querySelector("#signin-code").focus();
+    setSignInMessage("Check your email and enter the code here. You can read the email on your phone.", "success");
   } catch (error) {
-    setSignInMessage(`Could not send a sign-in link: ${error.message}`, "error");
+    setSignInMessage(`Could not send a verification code: ${error.message}`, "error");
   } finally {
     button.disabled = false;
-    button.textContent = "Send sign-in link";
+    document.querySelector("#verify-code").disabled = false;
+    button.textContent = pendingSignInEmail ? "Resend verification code" : "Send verification code";
+  }
+}
+
+async function verifyEmailCode(event) {
+  event.preventDefault();
+  const email = pendingSignInEmail;
+  if (!client || !email) {
+    setSignInMessage("Request a verification code first.", "error");
+    return;
+  }
+  const token = document.querySelector("#signin-code").value.trim();
+  if (!/^\d{6,10}$/.test(token)) {
+    setSignInMessage("Enter the verification code from your email.", "error");
+    return;
+  }
+  const button = document.querySelector("#verify-code");
+  if (button.disabled) return;
+  const emailInput = document.querySelector("#signin-email");
+  const sendButton = document.querySelector("#send-magic-link");
+  button.disabled = true;
+  sendButton.disabled = true;
+  emailInput.disabled = true;
+  button.textContent = "Verifying…";
+  setSignInMessage("");
+  try {
+    const { data, error } = await client.auth.verifyOtp({ email, token, type: "email" });
+    if (error) throw error;
+    if (!data.session) throw new Error("No sign-in session was returned. Request a new code.");
+    document.querySelector("#signin-code").value = "";
+    await applySession(data.session);
+  } catch (error) {
+    setSignInMessage(`Could not verify the code: ${error.message} Try again or request a new code.`, "error");
+  } finally {
+    button.disabled = false;
+    sendButton.disabled = false;
+    emailInput.disabled = false;
+    button.textContent = "Verify and sign in";
   }
 }
 
@@ -546,18 +670,23 @@ async function runQuery() {
     showFeedback(error.message, "error");
     return;
   }
-  runButton.disabled = true;
-  runButton.textContent = "Running…";
+  const attempt = { auth: authGeneration, view: viewRevision };
+  const quizId = currentQuizId;
+  activeRun = attempt;
+  const isCurrent = () => signedIn && attempt.auth === authGeneration &&
+    attempt.view === viewRevision && activeRun === attempt;
+  updateRunButton();
   resultHeading.textContent = "Running your query…";
   resultState.textContent = "RUNNING";
   resultState.classList.remove("is-ready");
   try {
     const data = await invokeApi({
       action: "run",
-      questionId: currentQuizId,
+      questionId: quizId,
       query: editor.value,
       parameters,
     });
+    if (!isCurrent()) return;
     renderTable(data.columns, data.rows, resultsContent);
     resultHeading.textContent = "Query results";
     resultState.textContent = "EXECUTED";
@@ -567,14 +696,14 @@ async function runQuery() {
       : `${data.rows.length} row${data.rows.length === 1 ? "" : "s"} returned from Supabase.`;
     showFeedback("Query ran successfully.", "success");
   } catch (error) {
+    if (!isCurrent()) return;
     resultHeading.textContent = "Query could not be completed";
     resultState.textContent = "ERROR";
     resultsContent.innerHTML = "";
     showFeedback(error.message, "error");
   } finally {
-    runButton.disabled = !signedIn;
-    runButton.innerHTML =
-      '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4.5 8 5.5-8 5.5z" /></svg> Run query';
+    if (activeRun === attempt) activeRun = null;
+    updateRunButton();
   }
 }
 
@@ -591,21 +720,30 @@ async function saveQuiz() {
     return;
   }
 
-  saveButton.disabled = true;
-  saveButton.textContent = "Saving…";
+  const quizId = currentQuizId;
+  const auth = authGeneration;
+  const view = viewRevision;
+  const pendingKey = `${auth}:${quizId}`;
+  if (savesInFlight.has(pendingKey)) return;
+  savesInFlight.add(pendingKey);
+  updateSaveButton();
   try {
     const data = await invokeApi({
       action: "save",
-      questionId: currentQuizId,
+      questionId: quizId,
       query: editor.value,
       parameters,
     });
-    savedProgress[currentQuizId] = data.progress;
+    if (!signedIn || auth !== authGeneration) return;
+    savedProgress[quizId] = data.progress;
     updateProgress();
-    showFeedback("Your query and parameters were saved to your account.", "success");
+    if (view === viewRevision) showFeedback("Your query and parameters were saved to your account.", "success");
   } catch (error) {
-    showFeedback(`Could not save this question: ${error.message}`, "error");
+    if (signedIn && auth === authGeneration && view === viewRevision) {
+      showFeedback(`Could not save this question: ${error.message}`, "error");
+    }
   } finally {
+    savesInFlight.delete(pendingKey);
     updateSaveButton();
   }
 }
@@ -625,6 +763,7 @@ for (const item of navItems) {
 }
 
 editor.addEventListener("input", () => {
+  editorRevision++;
   showFeedback("");
   updateLineNumbers();
 });
@@ -637,6 +776,7 @@ editor.addEventListener("keydown", (event) => {
   if (event.key === "Tab") {
     event.preventDefault();
     editor.setRangeText("    ", editor.selectionStart, editor.selectionEnd, "end");
+    editorRevision++;
     updateLineNumbers();
     return;
   }
@@ -647,6 +787,7 @@ editor.addEventListener("keydown", (event) => {
 });
 
 paramsInput.addEventListener("input", () => {
+  editorRevision++;
   showFeedback("");
 });
 
@@ -744,6 +885,14 @@ document.querySelector("#callout-sign-in").addEventListener("click", () => {
 });
 signOutButton.addEventListener("click", signOut);
 signInForm.addEventListener("submit", signInWithEmail);
+document.querySelector("#signin-code-form").addEventListener("submit", verifyEmailCode);
+document.querySelector("#signin-email").addEventListener("input", () => {
+  pendingSignInEmail = null;
+  document.querySelector("#signin-code-form").hidden = true;
+  document.querySelector("#signin-code").value = "";
+  document.querySelector("#send-magic-link").textContent = "Send verification code";
+  setSignInMessage("");
+});
 
 const config = window.SUPABASE_CONFIG ?? {};
 const hasSupabaseConfig =

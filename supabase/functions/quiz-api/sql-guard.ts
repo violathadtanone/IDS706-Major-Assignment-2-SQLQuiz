@@ -131,10 +131,14 @@ export function guardReadOnlyQuery(
   try {
     statements = parse(sql);
   } catch {
-    throw new SqlGuardError("The SQL parser could not understand this query.");
+    throw new SqlGuardError(
+      "This SQL could not be accepted. Only read-only SELECT queries are allowed; INSERT, UPDATE, DELETE and database changes are not allowed.",
+    );
   }
   if (statements.length !== 1) {
-    throw new SqlGuardError("Run one SQL statement at a time.");
+    throw new SqlGuardError(
+      "Run one read-only SELECT statement at a time. Combining SELECT with INSERT, UPDATE, DELETE or other database changes is not allowed.",
+    );
   }
 
   const statement = statements[0];
@@ -143,7 +147,9 @@ export function guardReadOnlyQuery(
     statement.type !== "union" &&
     statement.type !== "union all"
   ) {
-    throw new SqlGuardError("Only read-only SELECT queries are allowed.");
+    throw new SqlGuardError(
+      "Only read-only SELECT queries are allowed. INSERT, UPDATE, DELETE and schema or permission changes are not allowed.",
+    );
   }
 
   rejectUnsafeSelectClauses(statement);
