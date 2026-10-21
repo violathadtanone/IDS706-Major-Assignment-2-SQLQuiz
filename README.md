@@ -61,7 +61,7 @@ Configuration:
 python -m venv .venv
 source .venv/bin/activate
 ```
-- Upgrade pip to ensure that it is compatible with the current Python version before installing other packages. We also include upgrade `ipykernel` since it is key for the assignment.
+- Upgrade pip to ensure that it is compatible with the current Python version before installing other packages.
 ```bash
 python -m pip install --upgrade pip
 ```
@@ -73,7 +73,7 @@ python -m pip install --upgrade pip
 
 ## Supabase Setup Instructions - Create pre-requisite files
 ### 1. .env
-- This stores the local database connection settings used by the application and scripts. 
+- This stores the database connection settings used by the local Python script (query.py). The live quiz uses separate Supabase configuration and secrets.
 - After creating the Supabase database, open the Session Pooler connection details in Supabase and use those values to fill in the value based on the format below:
 ```
 POSTGRES_DB=postgres
@@ -134,7 +134,7 @@ The project uses a simple three-part setup:
 - Parameterized queries: Application-owned database operations use parameters rather than f-string or string-concatenated SQL, helping reduce SQL injection risk.  
 - Audit logging: Query runs and saved quiz answers are recorded in quiz_audit_log, including who performed the action, what was run or saved, and when it occurred.  
 - Audit-log integrity: The restricted quiz role cannot modify the audit history. Direct UPDATE, DELETE, and TRUNCATE attempts are blocked by PostgreSQL permissions.
-
+<br><br>
 
 ## SQL Quiz Instructions
 1. Open https://violathadtanone.github.io/IDS706-Major-Assignment-2-SQLQuiz/
