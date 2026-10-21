@@ -10,7 +10,7 @@ function request(claims: Record<string, unknown>): Request {
   });
 }
 
-Deno.test("extracts the OTP session from an already verified token", () => {
+Deno.test("extracts a Magic Link session from an already verified OTP-method token", () => {
   const result = getLoginSession(
     request({
       sub: userId,

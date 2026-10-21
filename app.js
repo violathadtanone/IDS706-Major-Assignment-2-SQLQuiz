@@ -216,7 +216,6 @@ let checkingAnswer = false;
 let savedProgress = {};
 let client = null;
 let initializationError = "";
-let pendingSignInEmail = null;
 let activeSessionKey = null;
 let sessionInitialization = null;
 let authGeneration = 0;
@@ -534,7 +533,7 @@ async function applySession(session) {
     if (!claims.session_id) throw new Error("Missing session identifier");
     key = `${session.user.id}:${claims.session_id}`;
   } catch {
-    setSignInMessage("The sign-in session is invalid. Request a new email code.", "error");
+    setSignInMessage("The sign-in session is invalid. Request a new Magic Link.", "error");
     return false;
   }
   // Token refreshes and repeated callbacks for this session preserve drafts,
@@ -561,10 +560,7 @@ async function applySession(session) {
       activeSessionKey = key;
       loadEarnedPoints();
       if (signInDialog.open) signInDialog.close();
-      pendingSignInEmail = null;
-      document.querySelector("#signin-code").value = "";
-      document.querySelector("#signin-code-form").hidden = true;
-      document.querySelector("#send-magic-link").textContent = "Send verification code";
+      document.querySelector("#send-magic-link").textContent = "Send Magic Link";
       renderQuiz(currentQuizId);
       setSignInMessage("");
       await loadSavedProgress();
@@ -598,63 +594,25 @@ async function signInWithEmail(event) {
   const button = document.querySelector("#send-magic-link");
   if (button.disabled) return;
   button.disabled = true;
-  document.querySelector("#verify-code").disabled = true;
   button.textContent = "Sending…";
   setSignInMessage("");
   try {
-    const { error } = await client.auth.signInWithOtp({ email });
+    const { error } = await client.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: "https://violathadtanone.github.io/IDS706-Major-Assignment-2-SQLQuiz/",
+      },
+    });
     if (error) {
       throw error;
     }
     if (document.querySelector("#signin-email").value.trim() !== email) return;
-    pendingSignInEmail = email;
-    document.querySelector("#signin-code").value = "";
-    document.querySelector("#signin-code-form").hidden = false;
-    document.querySelector("#signin-code").focus();
-    setSignInMessage("Check your email and enter the code here. You can read the email on your phone.", "success");
+    setSignInMessage("Check your email and click the Magic Link to return to the quiz and sign in.", "success");
   } catch (error) {
-    setSignInMessage(`Could not send a verification code: ${error.message}`, "error");
+    setSignInMessage(`Could not send a Magic Link: ${error.message}`, "error");
   } finally {
     button.disabled = false;
-    document.querySelector("#verify-code").disabled = false;
-    button.textContent = pendingSignInEmail ? "Resend verification code" : "Send verification code";
-  }
-}
-
-async function verifyEmailCode(event) {
-  event.preventDefault();
-  const email = pendingSignInEmail;
-  if (!client || !email) {
-    setSignInMessage("Request a verification code first.", "error");
-    return;
-  }
-  const token = document.querySelector("#signin-code").value.trim();
-  if (!/^\d{6,10}$/.test(token)) {
-    setSignInMessage("Enter the verification code from your email.", "error");
-    return;
-  }
-  const button = document.querySelector("#verify-code");
-  if (button.disabled) return;
-  const emailInput = document.querySelector("#signin-email");
-  const sendButton = document.querySelector("#send-magic-link");
-  button.disabled = true;
-  sendButton.disabled = true;
-  emailInput.disabled = true;
-  button.textContent = "Verifying…";
-  setSignInMessage("");
-  try {
-    const { data, error } = await client.auth.verifyOtp({ email, token, type: "email" });
-    if (error) throw error;
-    if (!data.session) throw new Error("No sign-in session was returned. Request a new code.");
-    document.querySelector("#signin-code").value = "";
-    await applySession(data.session);
-  } catch (error) {
-    setSignInMessage(`Could not verify the code: ${error.message} Try again or request a new code.`, "error");
-  } finally {
-    button.disabled = false;
-    sendButton.disabled = false;
-    emailInput.disabled = false;
-    button.textContent = "Verify and sign in";
+    button.textContent = "Send Magic Link";
   }
 }
 
@@ -885,12 +843,8 @@ document.querySelector("#callout-sign-in").addEventListener("click", () => {
 });
 signOutButton.addEventListener("click", signOut);
 signInForm.addEventListener("submit", signInWithEmail);
-document.querySelector("#signin-code-form").addEventListener("submit", verifyEmailCode);
 document.querySelector("#signin-email").addEventListener("input", () => {
-  pendingSignInEmail = null;
-  document.querySelector("#signin-code-form").hidden = true;
-  document.querySelector("#signin-code").value = "";
-  document.querySelector("#send-magic-link").textContent = "Send verification code";
+  document.querySelector("#send-magic-link").textContent = "Send Magic Link";
   setSignInMessage("");
 });
 

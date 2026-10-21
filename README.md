@@ -2,7 +2,7 @@
 
 ## School Lunch Data Lab
 
-This static quiz site connects to Supabase for email-code authentication, saved
+This static quiz site connects to Supabase for Magic Link authentication, saved
 answers, and SQL execution. Signed-out users cannot run, check, or save queries.
 Signed-in queries are parsed as one read-only `SELECT`, limited to the
 `schools`, `students`, and `meals` tables and a small allowlist of safe
@@ -83,17 +83,20 @@ key in `supabase-config.js` when published. Any Pages publishing setup must
 preserve those public values.
 Never include database credentials in frontend files.
 
-## Email-code sign-in and login transactions
+## Magic Link sign-in and login transactions
 
-Users request a code, read their email on any device, and enter the code in the
-original quiz page. Successful verification records the login through the trusted
-backend, then unlocks that browser, closes the dialog, and loads saved queries.
-Invalid or expired codes keep the dialog
-open; users can retry or resend (subject to Supabase's email rate limit).
+Users enter their email and receive a Supabase Magic Link from the default email
+service. Clicking the link returns to the quiz site. Supabase detects the session,
+then the trusted backend records the login and the UI unlocks and loads saved
+queries without a manual refresh. Open the link in the browser where you want to
+use the quiz; opening it on a phone does not sign in a separate computer browser.
+No SMTP setup or code-entry form is needed.
 
 One row in `public.login_transactions` records each successful quiz-app
-email-code login: `user_id`, `logged_in_at` (database timestamp),
+Magic Link login: `user_id`, `logged_in_at` (database timestamp),
 `authentication_method` (`email_otp`), and `session_id` (unique session identifier).
+`email_otp` is the existing technical label for email passwordless authentication:
+Supabase uses the `otp` authentication method for Magic Links as well as codes.
 The existing `quiz-api` verifies the bearer token with Supabase Auth before
 extracting its session ID. Only its server-side service client can insert or
 read these records. Repeated requests for one session do not change its timestamp
@@ -103,31 +106,21 @@ Supabase authentication remains valid, but the quiz stays locked with a clear
 message; reloading retries the idempotent recording request. This table does not
 replace Supabase's own audit logs or change `quiz_audit_log`.
 
-Deploy these changes manually, keeping GitHub Actions as database verification:
+The hosted login-table reconciliation migration has already been applied. No
+new migration or rerun is needed for this switch to Magic Links. Preserve the
+existing table, permissions, and session deduplication.
 
-1. Apply **only the reconciliation migration** to the existing hosted table,
-   from the project root, after approving the deployment. It handles the hosted
-   `login_at` / `auth_method` names and the original migration's canonical names,
-   preserves existing records, enables RLS, removes client policies/grants, and
-   permits only the service role to select/insert. It retains existing session
-   uniqueness and enforces complete new records without rewriting legacy rows.
-   If required columns are missing or both old/new names exist, it stops with
-   an error rather than guessing or discarding data. It is safe to rerun.
-   The prompt asks for your existing database administrator password:
+Publish the Magic Link changes manually, keeping GitHub Actions as database verification:
 
-   ```sh
-   PGSSLMODE=require psql \
-     -h aws-1-us-west-2.pooler.supabase.com -p 5432 \
-     -U postgres.wfbucjgkxpzqxkckrxyr -d postgres -W -X \
-     --single-transaction -v ON_ERROR_STOP=1 \
-     -f supabase/migrations/20261020000003_reconcile_login_transactions.sql
-   ```
-
-   The existing hosted `login_transactions` table is required. Do not rerun
-   its original CREATE TABLE migration, the dataset migration, or `init.sql`
-   against your existing database. A fresh project still needs the original
-   migrations first, followed by this reconciliation migration.
-2. Deploy the updated function using the Supabase CLI:
+1. In **Supabase → Authentication → URL Configuration**, set **Site URL** to
+   `https://violathadtanone.github.io/IDS706-Major-Assignment-2-SQLQuiz/`
+   and add that exact URL (including the trailing slash) under **Redirect URLs**.
+   The frontend explicitly requests this destination using `emailRedirectTo`.
+   Keep the default email sender and default Magic Link template; no SMTP or
+   template edits are required. See Supabase's
+   [Magic Link guide](https://supabase.com/docs/guides/auth/auth-email-passwordless#with-magic-link)
+   and [redirect configuration](https://supabase.com/docs/guides/auth/redirect-urls).
+2. Deploy the updated function to publish its email sign-in error wording:
 
    ```sh
    npx supabase login
@@ -135,23 +128,13 @@ Deploy these changes manually, keeping GitHub Actions as database verification:
    ```
 
    Keep its existing `QUIZ_DATABASE_URL` secret and JWT verification settings.
-3. In **Supabase → Authentication → Email Templates**, update **Magic Link**
-   and **Confirm signup** (for new users) to show the code instead of a link:
-
-   ```html
-   <h2>Your quiz sign-in code</h2>
-   <p>Enter this code on the quiz page where you requested it:</p>
-   <p><strong>{{ .Token }}</strong></p>
-   ```
-
-   Supabase uses the same `signInWithOtp` API for codes and magic links; the
-   template determines the email content. See the official
-   [email OTP instructions](https://supabase.com/docs/guides/auth/auth-email-passwordless#with-otp).
-4. Publish the updated `index.html`, `app.js`, and `style.css` through your
-   existing Pages publishing process. Test with an existing account and a new
-   email: request on desktop, read on phone, and enter the code on desktop.
-   Verify the dialog closes, the quiz unlocks, and one login row is recorded;
-   reloading or refreshing the session should not add another row.
+   The existing login validation and insert remain compatible with Magic Links;
+   this function change only updates error wording.
+3. Publish the updated `index.html`, `app.js`, and `style.css` through your
+   existing Pages publishing process. Request a fresh Magic Link, open it in
+   the desired browser, and verify it returns to the exact quiz URL and unlocks
+   the quiz. One login row is recorded per session; reloading or refreshing the
+   session must not add another row.
 
 ## Local checks
 
@@ -180,7 +163,7 @@ For live evidence, use `tests/quiz-permissions_live_test.ts`. It requires:
   by the Edge Function, with SSL required. Never use the administrator URL or
   the GitHub Actions `DATABASE_URL`. The test checks the real connection's
   session user is `quiz_runner` before attempting any permission probes.
-- `QUIZ_TEST_ACCESS_TOKEN`: a current access token from an email-code sign-in
+- `QUIZ_TEST_ACCESS_TOKEN`: a current access token from a Magic Link sign-in
   to a **disposable quiz test account** in the same project. In the signed-in
   quiz's browser developer console, Chrome's `copy` helper can copy it without
   printing it: `copy((await client.auth.getSession()).data.session.access_token)`.
@@ -231,9 +214,10 @@ data are not changed. This test does not deploy anything or change GitHub Action
 
 ## Final manual acceptance checks
 
-After the migration, Edge Function redeployment, and frontend publication:
+After redirect configuration, Edge Function redeployment, and frontend publication:
 
-- Request an OTP on desktop, read it on a phone, and enter it on desktop. Verify
+- Request a Magic Link and open it in the browser where you want to use the quiz.
+  Verify the redirect includes `/IDS706-Major-Assignment-2-SQLQuiz/` and there is
   one row with the correct user, server timestamp, `email_otp` and session ID;
   the dialog closes and the quiz unlocks only after the backend records it.
   Reload/focus/refresh the session: the same session has one row and its original

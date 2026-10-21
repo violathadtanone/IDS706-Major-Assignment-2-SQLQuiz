@@ -23,12 +23,12 @@ export function getLoginSession(
         entry?.method === "otp"
       )
     ) {
-      throw new Error("Missing email OTP session");
+      throw new Error("Missing email sign-in session");
     }
     return claims.session_id;
   } catch {
     throw new Error(
-      "A verified email-code session is required to record a login.",
+      "A verified email sign-in session is required to record a login.",
     );
   }
 }

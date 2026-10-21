@@ -30,7 +30,7 @@ function deferred() {
 }
 
 function setup(
-  { verificationError = null, loggingError = null, invokeHook = null } = {},
+  { sendError = null, loggingError = null, invokeHook = null, bootstrap = false } = {},
 ) {
   const nodes = new Map();
   function element() {
@@ -72,35 +72,18 @@ function setup(
     createElement: element,
     createTextNode: (s) => s,
   };
-  const app = new Function(
-    "document",
-    "window",
-    "localStorage",
-    "Response",
-    source + `
-    return { signInWithEmail, verifyEmailCode, applySession,
-      runQuery, saveQuiz, checkAnswer, invokeApi, renderQuiz, quizzes, questionIds, loadSavedProgress,
-      points() { return earnedQuestions.size * 4; },
-      useClient(value) { client = value; },
-      isSignedIn() { return signedIn; }
-    };
-  `,
-  )(document, {}, { getItem: () => null }, Response);
+  let authCallback, clientOptions;
+  const restoredSession = deferred();
   const requests = [];
   const saved = new Map();
   const session = makeSession();
-  app.useClient({
+  const sdkClient = {
     auth: {
+      onAuthStateChange(callback) { authCallback = callback; },
+      getSession() { return restoredSession.promise; },
       async signInWithOtp(body) {
         requests.push(["send", body]);
-        return { error: null };
-      },
-      async verifyOtp(body) {
-        requests.push(["verify", body]);
-        return {
-          data: { session: verificationError ? null : session },
-          error: verificationError,
-        };
+        return { error: sendError };
       },
     },
     functions: {
@@ -133,98 +116,102 @@ function setup(
         return { data: { progress: [...saved.values()] }, error: null };
       },
     },
-  });
+  };
+  const app = new Function(
+    "document",
+    "window",
+    "localStorage",
+    "Response",
+    source + `
+    return { signInWithEmail, applySession,
+      runQuery, saveQuiz, checkAnswer, invokeApi, renderQuiz, quizzes, questionIds, loadSavedProgress,
+      points() { return earnedQuestions.size * 4; },
+      useClient(value) { client = value; },
+      isSignedIn() { return signedIn; }
+    };
+  `,
+  )(document, bootstrap ? {
+    SUPABASE_CONFIG: { url: "https://example.supabase.co", anonKey: "public-test-key" },
+    supabase: { createClient(_url, _key, options) {
+      clientOptions = options;
+      return sdkClient;
+    } },
+  } : {}, { getItem: () => null }, Response);
+  if (!bootstrap) app.useClient(sdkClient);
   const get = (selector) => document.querySelector(selector);
   get("#signin-email").value = session.user.email;
-  get("#signin-code-form").hidden = true;
   get("#signin-dialog").open = true;
-  return { app, get, requests, session };
+  return { app, get, requests, session, clientOptions,
+    restoreSession(value) { restoredSession.resolve({ data: { session: value }, error: null }); },
+    emitAuth(event, value) { authCallback(event, value); },
+  };
 }
 const event = { preventDefault() {} };
 
-Deno.test("request and verify code signs in the original page and records only login action", async () => {
+Deno.test("Magic Link request uses the exact quiz redirect; returned session unlocks and logs once", async () => {
   const { app, get, requests, session } = setup();
   await app.signInWithEmail(event);
-  assert(!get("#signin-code-form").hidden, "Code field should appear");
-  assert(!app.isSignedIn(), "Requesting a code must not sign in");
-  get("#signin-code").value = "123456";
-  await app.verifyEmailCode(event);
-  assert(app.isSignedIn(), "Original page should be signed in");
+  assert(!app.isSignedIn(), "Requesting a link must not sign in");
+  assert(!requests.some(([kind]) => kind === "login"), "Requesting a link must not record a login");
+  const send = requests.find(([kind]) => kind === "send")[1];
+  assert(send.email === session.user.email, "Wrong recipient");
+  assert(
+    send.options.emailRedirectTo === "https://violathadtanone.github.io/IDS706-Major-Assignment-2-SQLQuiz/",
+    "Magic Link must return to the quiz project URL",
+  );
+  assert(get("#signin-message").textContent.includes("Magic Link"), "Missing link instructions");
+  // Supabase URL detection/auth callbacks deliver this session on return.
+  await app.applySession(session);
+  assert(app.isSignedIn(), "Returned session should sign in");
   assert(!get("#signin-dialog").open, "Dialog should close");
   assert(!get("#sql-editor").readOnly, "Quiz should unlock");
-  assert(get("#signin-code").value === "", "Clear verified code");
-  const verify = requests.find(([kind]) => kind === "verify")[1];
-  assert(
-    verify.email === session.user.email && verify.token === "123456" &&
-      verify.type === "email",
-    "Wrong verification arguments",
-  );
   const login = requests.filter(([kind]) => kind === "login");
   assert(login.length === 1, "Expected one login request");
   assert(
     JSON.stringify(login[0][1]) === '{"action":"login"}',
-    "Do not send identity/code/session in login body",
+    "Do not send identity/token/session in login body",
   );
   await app.applySession(session);
   assert(
     requests.filter(([kind]) => kind === "login").length === 1,
-    "Session refresh must not log another login",
+    "Repeated session callback must not log another login",
   );
 });
 
-Deno.test("invalid or expired code keeps the dialog open and records no login", async () => {
-  const { app, get, requests } = setup({
-    verificationError: new Error("Code expired"),
+for (const mode of ["returned Magic Link", "restored persisted session"]) {
+  Deno.test(`${mode} initializes through Supabase callbacks without manual refresh`, async () => {
+    const fixture = setup({ bootstrap: true });
+    const { app, get, session, clientOptions, requests } = fixture;
+    assert(clientOptions.auth.detectSessionInUrl, "Must detect Magic Link session in URL");
+    assert(clientOptions.auth.persistSession && clientOptions.auth.autoRefreshToken, "Session persistence/refresh must stay enabled");
+    fixture.restoreSession(session);
+    if (mode === "returned Magic Link") fixture.emitAuth("SIGNED_IN", session);
+    // Drain the async auth callback, logging, and saved-progress load.
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    assert(app.isSignedIn() && !get("#sql-editor").readOnly, "Session did not unlock quiz automatically");
+    assert(!get("#signin-dialog").open, "Sign-in dialog did not close");
+    assert(requests.filter(([kind]) => kind === "login").length === 1, "Restoration/callback must record one login");
   });
+}
+
+Deno.test("failed Magic Link delivery keeps the quiz locked and allows retry", async () => {
+  const { app, get, requests } = setup({ sendError: new Error("Email rate limit exceeded") });
   await app.signInWithEmail(event);
-  get("#signin-code").value = "123456";
-  await app.verifyEmailCode(event);
-  assert(
-    !app.isSignedIn() && get("#signin-dialog").open,
-    "Failed verification changed auth",
-  );
-  assert(
-    !requests.some(([kind]) => kind === "login"),
-    "Failed login was recorded",
-  );
-  assert(
-    get("#signin-message").textContent.includes("Code expired"),
-    "Missing feedback",
-  );
-  assert(
-    !get("#verify-code").disabled && !get("#send-magic-link").disabled,
-    "Retry buttons should be enabled",
-  );
+  assert(!app.isSignedIn() && get("#signin-dialog").open, "Failed delivery changed auth");
+  assert(!requests.some(([kind]) => kind === "login"), "Failed delivery recorded a login");
+  assert(get("#signin-message").textContent.includes("Email rate limit exceeded"), "Missing feedback");
+  assert(!get("#send-magic-link").disabled, "Retry button should be enabled");
   await app.signInWithEmail(event);
-  assert(
-    requests.filter(([kind]) => kind === "send").length === 2,
-    "Resend should request another code",
-  );
+  assert(requests.filter(([kind]) => kind === "send").length === 2, "Retry should request another link");
 });
 
-Deno.test("recording failure keeps the quiz locked and can retry the same valid session", async () => {
-  const { app, get } = setup({
-    loggingError: { message: "Logging unavailable" },
-  });
-  await app.signInWithEmail(event);
-  get("#signin-code").value = "123456";
-  await app.verifyEmailCode(event);
+Deno.test("recording failure keeps a returned Magic Link session locked", async () => {
+  const { app, get, session } = setup({ loggingError: { message: "Logging unavailable" } });
+  await app.applySession(session);
+  assert(!app.isSignedIn() && get("#sql-editor").readOnly, "Quiz must stay locked until login is recorded");
+  assert(get("#signin-dialog").open, "Keep the sign-in dialog open on recording failure");
   assert(
-    !app.isSignedIn() && get("#sql-editor").readOnly,
-    "Quiz must stay locked until login is recorded",
-  );
-  assert(
-    get("#signin-dialog").open,
-    "Keep the sign-in dialog open on recording failure",
-  );
-  assert(
-    get("#signin-code").value === "",
-    "Do not keep a consumed OTP in the input",
-  );
-  assert(
-    get("#feedback-message").textContent.includes(
-      "login transaction could not be recorded",
-    ),
+    get("#feedback-message").textContent.includes("login transaction could not be recorded"),
     "Missing recording failure feedback",
   );
 });
@@ -446,7 +433,7 @@ Deno.test("repeated auth callbacks share login recording and wait before unlocki
   );
 });
 
-Deno.test("failed login recording retries without another OTP and sign-out cancels pending initialization", async () => {
+Deno.test("failed login recording retries without another Magic Link and sign-out cancels pending initialization", async () => {
   let fail = true;
   const fixture = setup({
     invokeHook: (body) =>
