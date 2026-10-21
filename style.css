@@ -66,29 +66,27 @@ summary:focus-visible {
 
 .course-brand {
   display: inline-flex;
-  gap: 11px;
+  gap: 5px;
   align-items: center;
   color: var(--ink);
   text-decoration: none;
 }
 
 .brand-mark {
-  width: 34px;
+  width: 40px;
   height: 34px;
   display: grid;
   place-items: center;
-  border-radius: 10px;
-  background: var(--navy);
-  box-shadow: 0 4px 10px rgba(23, 55, 97, 0.16);
 }
 
 .brand-mark svg {
-  width: 20px;
+  width: 35px;
+  height: 26px;
   fill: none;
-  stroke: #fff;
+  stroke: #79aeca;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.6;
+  stroke-width: 1.5;
 }
 
 .brand-name {
